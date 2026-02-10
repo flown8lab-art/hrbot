@@ -44,5 +44,5 @@ packages = ["openssl"]
 ADMIN_ID = "7166513643"
 
 [deployment]
-deploymentTarget = "scheduled"
+deploymentTarget = "cloudrun"
 run = ["python", "bot/telegram_parser.py"]
