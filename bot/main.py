@@ -6,13 +6,14 @@ import asyncio
 import aiohttp
 import requests
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, LabeledPrice
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
     ConversationHandler,
+    PreCheckoutQueryHandler,
     ContextTypes,
     filters
 )
@@ -952,6 +953,24 @@ async def post_init(application):
         ("cancel", "Отменить текущий поиск")
     ])
 
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_invoice(
+        title="Premium доступ",
+        description="Доступ к полному функционалу",
+        payload="premium-access",
+        provider_token="",
+        currency="XTR",
+        prices=[LabeledPrice("Premium", 100)],
+    )
+
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.pre_checkout_query
+    await query.answer(ok=True)
+
+async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Оплата прошла успешно. Доступ открыт.")
+
+
 def main():
     if not TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not set!")
@@ -998,6 +1017,9 @@ def main():
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('stats', stats_command))
     application.add_handler(CommandHandler('myid', myid_command))
+    application.add_handler(CommandHandler('buy', buy))
+    application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     
     logger.info("Bot starting...")
     
