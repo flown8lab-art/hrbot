@@ -5,7 +5,6 @@ import logging
 import asyncio
 import aiohttp
 import requests
-from datetime import datetime
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, LabeledPrice
 from telegram.ext import (
@@ -1011,13 +1010,36 @@ async def post_init(application):
     ])
 
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard_text = (
+        "Выберите пакет:\n\n"
+        "1️⃣ Start — 290₽ (10 откликов)\n"
+        "2️⃣ Active — 750₽ (30 откликов)\n"
+        "3️⃣ Turbo — 1990₽ (30 дней безлимит)\n\n"
+        "Введите: start / active / turbo"
+    )
+    await update.message.reply_text(keyboard_text)
+
+async def handle_package(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.lower().strip()
+
+    if text not in ["start", "active", "turbo"]:
+        return
+
+    prices_map = {
+        "start": ("Start", 29000, 10),
+        "active": ("Active", 75000, 30),
+        "turbo": ("Turbo", 199000, None),
+    }
+
+    title, amount, credits = prices_map[text]
+
     await update.message.reply_invoice(
-        title="Premium доступ",
-        description="Доступ к полному функционалу",
-        payload="premium-access",
+        title=f"{title} пакет",
+        description="Оплата через Telegram Stars",
+        payload=text,
         provider_token="",
         currency="XTR",
-        prices=[LabeledPrice("Premium", 100)],
+        prices=[LabeledPrice(title, amount)],
     )
 
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1025,7 +1047,19 @@ async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer(ok=True)
 
 async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Оплата прошла успешно. Доступ открыт.")
+    user_id = update.effective_user.id
+    payload = update.message.successful_payment.invoice_payload
+
+    user = get_user(user_id)
+
+    if payload == "start":
+        user["credits"] += 10
+    elif payload == "active":
+        user["credits"] += 30
+    elif payload == "turbo":
+        user["turbo_until"] = datetime.now() + timedelta(days=30)
+
+    await update.message.reply_text("Оплата прошла успешно ✅ Доступ активирован.")
 
 
 def main():
@@ -1075,6 +1109,7 @@ def main():
     application.add_handler(CommandHandler('stats', stats_command))
     application.add_handler(CommandHandler('myid', myid_command))
     application.add_handler(CommandHandler('buy', buy))
+    application.add_handler(MessageHandler(filters.Regex(r'(?i)^(start|active|turbo)$') & ~filters.COMMAND, handle_package))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     

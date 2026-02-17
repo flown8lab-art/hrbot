@@ -1,0 +1,72 @@
+📌 5️⃣ КОМАНДА ПОКУПКИ
+
+Добавь:
+
+async def buy(update, context):
+    keyboard_text = (
+        "Выберите пакет:\n\n"
+        "1️⃣ Start — 290₽ (10 откликов)\n"
+        "2️⃣ Active — 750₽ (30 откликов)\n"
+        "3️⃣ Turbo — 1990₽ (30 дней безлимит)\n\n"
+        "Введите: start / active / turbo"
+    )
+    await update.message.reply_text(keyboard_text)
+
+📌 6️⃣ ОБРАБОТКА ВЫБОРА
+async def handle_package(update, context):
+    text = update.message.text.lower()
+
+    if text not in ["start", "active", "turbo"]:
+        return
+
+    prices_map = {
+        "start": ("Start", 29000, 10),
+        "active": ("Active", 75000, 30),
+        "turbo": ("Turbo", 199000, None),
+    }
+
+    title, amount, credits = prices_map[text]
+
+    await update.message.reply_invoice(
+        title=f"{title} пакет",
+        description="Оплата через Telegram Stars",
+        payload=text,
+        provider_token="",  # для Stars оставляем пустым
+        currency="XTR",
+        prices=[LabeledPrice(title, amount)],
+    )
+
+
+⚠️ В Telegram Stars валюта "XTR"
+
+📌 7️⃣ PRE-CHECKOUT
+async def precheckout_callback(update, context):
+    query = update.pre_checkout_query
+    await query.answer(ok=True)
+
+📌 8️⃣ ПОСЛЕ УСПЕШНОЙ ОПЛАТЫ
+async def successful_payment(update, context):
+    user_id = update.effective_user.id
+    payload = update.message.successful_payment.invoice_payload
+
+    user = get_user(user_id)
+
+    if payload == "start":
+        user["credits"] += 10
+
+    elif payload == "active":
+        user["credits"] += 30
+
+    elif payload == "turbo":
+        user["turbo_until"] = datetime.now() + timedelta(days=30)
+
+    await update.message.reply_text("Оплата прошла успешно ✅ Доступ активирован.")
+
+📌 9️⃣ ДОБАВЬ ХЕНДЛЕРЫ В MAIN
+
+Где у тебя application.add_handler(...), добавь:
+
+application.add_handler(CommandHandler("buy", buy))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_package))
+application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
