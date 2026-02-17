@@ -59,6 +59,6 @@ packages = ["openssl"]
 ADMIN_ID = "7166513643"
 
 [deployment]
-deploymentTarget = "cloudrun"
-run = ["python", "bot/telegram_parser.py"]
+deploymentTarget = "vm"
+run = ["python", "bot/main.py"]
 publicDir = "dist/public"
