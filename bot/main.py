@@ -6,6 +6,7 @@ import asyncio
 import aiohttp
 import requests
 from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, LabeledPrice
 from telegram.ext import (
     Application,
@@ -41,11 +42,35 @@ ADMIN_ID = int(os.environ.get('ADMIN_ID', '0'))
 STEP_START, STEP_RESUME, STEP_PREFERENCES, STEP_SEARCH, STEP_VACANCY = range(5)
 
 user_data_store = {}
+users_db = {}
 STATS_FILE = 'bot/stats.json'
 
 HH_API_URL = "https://api.hh.ru"
 TRUDVSEM_API_URL = "http://opendata.trudvsem.ru/api/v1"
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
+def get_user(user_id):
+    if user_id not in users_db:
+        users_db[user_id] = {
+            "credits": 3,
+            "turbo_until": None
+        }
+    return users_db[user_id]
+
+def has_access(user_id):
+    user = get_user(user_id)
+    if user["turbo_until"]:
+        if datetime.now() < user["turbo_until"]:
+            return True
+    return user["credits"] > 0
+
+def use_credit(user_id):
+    user = get_user(user_id)
+    if user["turbo_until"]:
+        if datetime.now() < user["turbo_until"]:
+            return
+    user["credits"] -= 1
+
 
 def load_stats():
     try:
@@ -85,10 +110,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     
     await update.message.reply_text(
-        "Привет! Я помогу найти работу на hh.ru и подготовить отклик.\n\n"
+        "Привет 👋\n\n"
+        "Я помогу тебе быстрее найти работу и подготовить персональный отклик на вакансию. А еще я дам тебе рекомендации, как улучшить свое резюме, чтобы выделиться из тысяч кандидатов.\n\n"
+
+        "🔎 Все вакансии с HH + 130 Telegram-каналов + РосРабота\n"
+        "✍️ Генерация сопроводительного письма под конкретную вакансию\n"
+        "📄 Рекомендации по улучшению твоего резюме\n\n"
+
+        "Ты получаешь 3 AI-отклика бесплатно.\n\n"
+
+        "Готов начать поиск?\n\n"
+        
         "Давай начнём пошагово:\n\n"
         "**Шаг 1 из 3**: Загрузи своё резюме\n"
-        "Отправь файл (PDF, Word) или текст резюме.",
+        "Загрузи файл или отправь текст резюме.",
         parse_mode='Markdown'
     )
     return STEP_RESUME
@@ -657,6 +692,16 @@ async def generate_cover_letter(update: Update, context: ContextTypes.DEFAULT_TY
     
     user_id = update.effective_user.id
     
+    if not has_access(user_id):
+        await query.edit_message_text(
+            "Бесплатные отклики закончились.\n\n"
+            "Start — 290₽ (10 откликов)\n"
+            "Active — 750₽ (30 откликов)\n"
+            "Turbo — 1990₽ (безлимит 30 дней)\n\n"
+            "Введите /buy"
+        )
+        return STEP_VACANCY
+    
     if user_id not in user_data_store:
         await query.edit_message_text("Сессия истекла. Начни заново: /start")
         return ConversationHandler.END
@@ -672,6 +717,7 @@ async def generate_cover_letter(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("Вакансия не выбрана. Начни заново: /start")
         return ConversationHandler.END
     
+    use_credit(user_id)
     await query.edit_message_text("Генерирую сопроводительное письмо (10-20 сек)...")
     
     description = vacancy.get('description', '')
@@ -776,6 +822,16 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = update.effective_user.id
     
+    if not has_access(user_id):
+        await query.edit_message_text(
+            "Бесплатные отклики закончились.\n\n"
+            "Start — 290₽ (10 откликов)\n"
+            "Active — 750₽ (30 откликов)\n"
+            "Turbo — 1990₽ (безлимит 30 дней)\n\n"
+            "Введите /buy"
+        )
+        return STEP_VACANCY
+    
     if user_id not in user_data_store:
         await query.edit_message_text("Сессия истекла. Начни заново: /start")
         return ConversationHandler.END
@@ -787,6 +843,7 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Данные не найдены. Начни заново: /start")
         return ConversationHandler.END
     
+    use_credit(user_id)
     await query.edit_message_text("Анализирую и адаптирую резюме (10-20 сек)...")
     
     description = vacancy.get('description', '')
