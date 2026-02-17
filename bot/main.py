@@ -67,11 +67,18 @@ def use_credit(user_id):
 
 
 def get_tariff_keyboard():
-    keyboard = [
-        [InlineKeyboardButton("Start — 290₽ (10 откликов)", callback_data="buy_start")],
-        [InlineKeyboardButton("Active — 750₽ (30 откликов)", callback_data="buy_active")],
-        [InlineKeyboardButton("Turbo — 1990₽ (30 дней)", callback_data="buy_turbo")]
-    ]
+    keyboard = [[
+        InlineKeyboardButton("Start — 290₽ (10 откликов)",
+                             callback_data="buy_start")
+    ],
+                [
+                    InlineKeyboardButton("Active — 750₽ (30 откликов)",
+                                         callback_data="buy_active")
+                ],
+                [
+                    InlineKeyboardButton("Turbo — 1990₽ (30 дней)",
+                                         callback_data="buy_turbo")
+                ]]
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -231,6 +238,9 @@ async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_data_store[user_id]['resume'] = resume_text.strip()
 
+    skip_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Пропустить ➡️", callback_data="skip_preferences")]
+    ])
     await update.message.reply_text(
         f"Резюме загружено ({len(resume_text)} символов)\n\n"
         "**Шаг 2 из 3**: Опиши свои пожелания к вакансии\n\n"
@@ -240,8 +250,9 @@ async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Опыт работы?\n"
         "• Город?\n\n"
         "Например: «удалёнка, от 150000, без опыта ок, Москва»\n\n"
-        "Или напиши «пропустить» чтобы искать без фильтров.",
-        parse_mode='Markdown')
+        "Или нажми кнопку, чтобы искать без фильтров.",
+        parse_mode='Markdown',
+        reply_markup=skip_kb)
     return STEP_PREFERENCES
 
 
@@ -304,6 +315,27 @@ async def receive_preferences(update: Update,
 
     await update.message.reply_text(
         f"Фильтры: {pref_summary}\n\n"
+        "**Шаг 3 из 3**: Поиск вакансий\n\n"
+        "Введи должность для поиска:\n"
+        "Например: «менеджер проекта» или «Python разработчик»",
+        parse_mode='Markdown')
+    return STEP_SEARCH
+
+
+async def skip_preferences_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = update.effective_user.id
+
+    if user_id not in user_data_store:
+        await query.edit_message_text("Начни сначала: /start")
+        return ConversationHandler.END
+
+    prefs = {'schedule': None, 'salary': None, 'experience': None, 'area': 113}
+    user_data_store[user_id]['preferences'] = prefs
+
+    await query.edit_message_text(
+        "Фильтры: без фильтров\n\n"
         "**Шаг 3 из 3**: Поиск вакансий\n\n"
         "Введи должность для поиска:\n"
         "Например: «менеджер проекта» или «Python разработчик»",
@@ -763,8 +795,7 @@ async def generate_cover_letter(update: Update,
             "Чтобы продолжить и не терять актуальные вакансии, выбери пакет ниже.\n"
             "Самые быстрые кандидаты получают приглашения первыми.",
             parse_mode="HTML",
-            reply_markup=get_tariff_keyboard()
-        )
+            reply_markup=get_tariff_keyboard())
         return STEP_VACANCY
 
     if user_id not in user_data_store:
@@ -903,8 +934,7 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Чтобы продолжить и не терять актуальные вакансии, выбери пакет ниже.\n"
             "Самые быстрые кандидаты получают приглашения первыми.",
             parse_mode="HTML",
-            reply_markup=get_tariff_keyboard()
-        )
+            reply_markup=get_tariff_keyboard())
         return STEP_VACANCY
 
     if user_id not in user_data_store:
@@ -1114,19 +1144,20 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Безлимит откликов на 30 дней\n\n"
         "Чем больше откликов — тем выше шанс получить оффер.\n",
         parse_mode="HTML",
-        reply_markup=get_tariff_keyboard()
-    )
+        reply_markup=get_tariff_keyboard())
 
-async def handle_buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def handle_buy_callback(update: Update,
+                              context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     pkg = query.data.replace("buy_", "")
 
     prices_map = {
-        "start": ("Start", 29000, 10),
-        "active": ("Active", 75000, 30),
-        "turbo": ("Turbo", 199000, None),
+        "start": ("Start", 160, 10),
+        "active": ("Active", 420, 30),
+        "turbo": ("Turbo", 1100, None),
     }
 
     if pkg not in prices_map:
@@ -1214,6 +1245,7 @@ def main():
                 MessageHandler(filters.Document.ALL, receive_resume)
             ],
             STEP_PREFERENCES: [
+                CallbackQueryHandler(skip_preferences_callback, pattern='^skip_preferences$'),
                 MessageHandler(filters.TEXT & ~filters.COMMAND,
                                receive_preferences)
             ],
@@ -1246,7 +1278,9 @@ def main():
     application.add_handler(CommandHandler('stats', stats_command))
     application.add_handler(CommandHandler('myid', myid_command))
     application.add_handler(CommandHandler('buy', buy_command))
-    application.add_handler(CallbackQueryHandler(handle_buy_callback, pattern=r'^buy_(start|active|turbo)$'))
+    application.add_handler(
+        CallbackQueryHandler(handle_buy_callback,
+                             pattern=r'^buy_(start|active|turbo)$'))
     application.add_handler(
         MessageHandler(
             filters.Regex(r'(?i)^(start|active|turbo)$') & ~filters.COMMAND,
