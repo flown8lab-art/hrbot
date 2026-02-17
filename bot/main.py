@@ -98,6 +98,7 @@ def track_search():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     track_user(user_id)
+
     user_data_store[user_id] = {
         'resume': None,
         'preferences': {},
@@ -106,18 +107,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'current_vacancy_index': 0
     }
 
-    await update.message.reply_text(
-        "Привет 👋\n\n"
-        "Я помогу тебе быстрее найти работу и подготовить персональный отклик на вакансию. А еще я дам тебе рекомендации, как улучшить свое резюме, чтобы выделиться из тысяч кандидатов.\n\n"
-        "🔎 Все вакансии с HH + 130 Telegram-каналов + РосРабота\n"
-        "✍️ Генерация сопроводительного письма под конкретную вакансию\n"
-        "📄 Рекомендации по улучшению твоего резюме\n\n"
-        "Ты получаешь 3 AI-отклика бесплатно.\n\n"
-        "Готов начать поиск?\n\n"
-        "Давай начнём пошагово:\n\n"
-        "**Шаг 1 из 3**: Загрузи своё резюме\n"
-        "Загрузи файл или отправь текст резюме.",
-        parse_mode='Markdown')
+    message = update.effective_message
+    if not message:
+        return STEP_RESUME
+
+    await message.reply_text(
+        "<b>Найди работу быстрее и выделись среди сотен кандидатов</b> 🚀\n\n"
+        "Я анализирую твоё резюме и под каждую вакансию создаю персональный отклик, "
+        "который увеличивает шанс приглашения на собеседование.\n\n"
+        "Что ты получаешь:\n"
+        "🔎 <b>Все вакансии с HH + 130 Telegram-каналов + РосРабота</b>\n"
+        "✍️ <b>AI-сопроводительное письмо под конкретные требования работодателя</b>\n"
+        "📄 <b>Рекомендации по усилению резюме</b>\n\n"
+        "🎁 <b>3 персональных отклика — бесплатно</b>\n"
+        "После этого можно выбрать тариф и продолжить.\n\n"
+        "— — —\n\n"
+        "<b>Шаг 1 из 3:</b>\n"
+        "📎 Загрузи своё резюме (PDF, DOCX или текст)\n\n"
+        "Готов начать? Отправь файл 👇",
+        parse_mode="HTML")
+
     return STEP_RESUME
 
 
@@ -740,11 +749,13 @@ async def generate_cover_letter(update: Update,
     user_id = update.effective_user.id
 
     if not has_access(user_id):
-        await query.edit_message_text("Бесплатные отклики закончились.\n\n"
-                                      "Start — 290₽ (10 откликов)\n"
-                                      "Active — 750₽ (30 откликов)\n"
-                                      "Turbo — 1990₽ (безлимит 30 дней)\n\n"
-                                      "Введите /buy")
+        await query.edit_message_text(
+            "⚠️ Бесплатные 3 отклика использованы.\n\n"
+            "Чтобы продолжить и не терять актуальные вакансии, выбери пакет ниже.\n"
+            "Самые быстрые кандидаты получают приглашения первыми.",
+            parse_mode="HTML",
+            reply_markup=get_tariff_keyboard()
+        )
         return STEP_VACANCY
 
     if user_id not in user_data_store:
@@ -878,11 +889,13 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if not has_access(user_id):
-        await query.edit_message_text("Бесплатные отклики закончились.\n\n"
-                                      "Start — 290₽ (10 откликов)\n"
-                                      "Active — 750₽ (30 откликов)\n"
-                                      "Turbo — 1990₽ (безлимит 30 дней)\n\n"
-                                      "Введите /buy")
+        await query.edit_message_text(
+            "⚠️ Бесплатные 3 отклика использованы.\n\n"
+            "Чтобы продолжить и не терять актуальные вакансии, выбери пакет ниже.\n"
+            "Самые быстрые кандидаты получают приглашения первыми.",
+            parse_mode="HTML",
+            reply_markup=get_tariff_keyboard()
+        )
         return STEP_VACANCY
 
     if user_id not in user_data_store:
@@ -1037,25 +1050,29 @@ async def back_to_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🤖 **HH Resume Helper**\n\n"
-        "Автоматический поиск работы на hh.ru\n\n"
-        "**Что умеет бот:**\n"
+    message = update.effective_message
+    if not message:
+        return
+    await message.reply_text(
+        "🤖 <b>HH Resume Helper</b>\n\n"
+        "Автоматический поиск работы по самым свежим вакансиям из 130+ источников\n\n"
+        "<b>Что умеет бот:</b>\n"
         "• Анализирует твоё резюме\n"
         "• Ищет вакансии с фильтрами (зарплата, удалёнка, опыт)\n"
-        "• Генерирует сопроводительные письма\n"
+        "• Генерирует сопроводительные письма на основании требований работодателя и твоих навыков в резюме\n"
         "• Даёт рекомендации по адаптации резюме\n\n"
-        "**Как пользоваться:**\n"
+        "<b>Как пользоваться:</b>\n"
         "1️⃣ Загрузи резюме (PDF, Word или текст)\n"
         "2️⃣ Укажи пожелания (например: «удалёнка, от 150к»)\n"
         "3️⃣ Введи должность для поиска\n"
-        "4️⃣ Выбери вакансию и получи письмо\n\n"
-        "**Команды:**\n"
+        "4️⃣ Выбери вакансию и получи сопроводительное письмо\n\n"
+        "<b>Команды:</b>\n"
         "/start — Начать поиск работы\n"
+        "/buy — Оплатить тариф для дальнейшей работы\n"
         "/help — Справка\n"
-        "/cancel — Отменить\n\n"
+        "/cancel — Отменить поиск\n\n"
         "📎 Форматы резюме: PDF, DOCX, TXT",
-        parse_mode='Markdown')
+        parse_mode="HTML")
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1071,14 +1088,25 @@ async def post_init(application):
                                            ])
 
 
-async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard_text = ("Выберите пакет:\n\n"
-                     "1️⃣ Start — 290₽ (10 откликов)\n"
-                     "2️⃣ Active — 750₽ (30 откликов)\n"
-                     "3️⃣ Turbo — 1990₽ (30 дней безлимит)\n\n"
-                     "Введите: start / active / turbo")
-    await update.message.reply_text(keyboard_text)
+async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    if not message:
+        return
 
+    await message.reply_text(
+        "💼 <b>Выбери пакет и продолжай откликаться без ограничений</b>\n\n"
+        "Ты уже увидел, как работает персонализация откликов.\n"
+        "Теперь можно масштабировать результат.\n\n"
+        "📦 <b>Start</b> — 290₽\n"
+        "10 AI-откликов\n\n"
+        "🚀 <b>Active</b> — 750₽\n"
+        "30 AI-откликов (лучший баланс цены и результата)\n\n"
+        "🔥 <b>Turbo</b> — 1990₽\n"
+        "Безлимит откликов на 30 дней\n\n"
+        "Чем больше откликов — тем выше шанс получить оффер.\n",
+        parse_mode="HTML",
+        reply_markup=get_tariff_keyboard()
+    )
 
 async def handle_package(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower().strip()
