@@ -66,6 +66,15 @@ def use_credit(user_id):
     user["credits"] -= 1
 
 
+def get_tariff_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("Start — 290₽ (10 откликов)", callback_data="buy_start")],
+        [InlineKeyboardButton("Active — 750₽ (30 откликов)", callback_data="buy_active")],
+        [InlineKeyboardButton("Turbo — 1990₽ (30 дней)", callback_data="buy_turbo")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
 def load_stats():
     try:
         with open(STATS_FILE, 'r') as f:
@@ -1108,6 +1117,34 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_tariff_keyboard()
     )
 
+async def handle_buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    pkg = query.data.replace("buy_", "")
+
+    prices_map = {
+        "start": ("Start", 29000, 10),
+        "active": ("Active", 75000, 30),
+        "turbo": ("Turbo", 199000, None),
+    }
+
+    if pkg not in prices_map:
+        return
+
+    title, amount, credits = prices_map[pkg]
+
+    await context.bot.send_invoice(
+        chat_id=query.message.chat_id,
+        title=f"{title} пакет",
+        description="Оплата через Telegram Stars",
+        payload=pkg,
+        provider_token="",
+        currency="XTR",
+        prices=[LabeledPrice(title, amount)],
+    )
+
+
 async def handle_package(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower().strip()
 
@@ -1209,6 +1246,7 @@ def main():
     application.add_handler(CommandHandler('stats', stats_command))
     application.add_handler(CommandHandler('myid', myid_command))
     application.add_handler(CommandHandler('buy', buy))
+    application.add_handler(CallbackQueryHandler(handle_buy_callback, pattern=r'^buy_(start|active|turbo)$'))
     application.add_handler(
         MessageHandler(
             filters.Regex(r'(?i)^(start|active|turbo)$') & ~filters.COMMAND,
