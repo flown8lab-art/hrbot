@@ -1005,6 +1005,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def post_init(application):
     await application.bot.set_my_commands([
         ("start", "Начать поиск работы"),
+        ("buy", "Купить пакет откликов"),
         ("help", "Справка и возможности"),
         ("cancel", "Отменить текущий поиск")
     ])
