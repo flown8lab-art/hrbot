@@ -1245,7 +1245,7 @@ def main():
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('stats', stats_command))
     application.add_handler(CommandHandler('myid', myid_command))
-    application.add_handler(CommandHandler('buy', buy))
+    application.add_handler(CommandHandler('buy', buy_command))
     application.add_handler(CallbackQueryHandler(handle_buy_callback, pattern=r'^buy_(start|active|turbo)$'))
     application.add_handler(
         MessageHandler(
