@@ -564,12 +564,18 @@ def _score_label(score: int) -> str:
 
 
 def get_vacancy_action_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✍️ Сопроводительное письмо", callback_data="gen_cover"),
-         InlineKeyboardButton("📄 Рекомендации по резюме", callback_data="adapt_resume")],
-        [InlineKeyboardButton("🔙 К списку вакансий", callback_data="back_to_list"),
-         InlineKeyboardButton("🔎 Новый поиск", callback_data="new_search")]
-    ])
+    return InlineKeyboardMarkup(
+        [[
+            InlineKeyboardButton("✍️ Сопроводительное письмо",
+                                 callback_data="gen_cover"),
+            InlineKeyboardButton("📄 Рекомендации по резюме",
+                                 callback_data="adapt_resume")
+        ],
+         [
+             InlineKeyboardButton("🔙 К списку вакансий",
+                                  callback_data="back_to_list"),
+             InlineKeyboardButton("🔎 Новый поиск", callback_data="new_search")
+         ]])
 
 
 def build_vacancy_keyboard(vacancies: list,
@@ -915,43 +921,27 @@ async def vacancy_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Описание:\n{description}...\n\n"
                 f"Ссылка: {vacancy_details.get('alternate_url', '')}")
 
-        await context.bot.send_message(chat_id=user_id,
-                                       text=vacancy_info,
-                                       parse_mode='Markdown')
+        try:
+            await context.bot.send_message(chat_id=user_id,
+                                           text=vacancy_info,
+                                           parse_mode='Markdown')
+        except Exception:
+            await context.bot.send_message(chat_id=user_id,
+                                           text=vacancy_info)
 
         user_data_store[user_id]['current_vacancy'] = vacancy_details
         user_data_store[user_id]['current_vacancy_index'] = vacancy_index
 
-        keyboard = [[
-            InlineKeyboardButton("Сгенерировать сопроводительное письмо",
-                                 callback_data="gen_cover")
-        ],
-                    [
-                        InlineKeyboardButton("Адаптировать резюме",
-                                             callback_data="adapt_resume")
-                    ],
-                    [
-                        InlineKeyboardButton("Назад к списку",
-                                             callback_data="back_to_list")
-                    ]]
-
-        if vacancy_index + 1 < len(vacancies):
-            keyboard.insert(2, [
-                InlineKeyboardButton(
-                    f"➡️ Следующая ({vacancy_index + 2} из {len(vacancies)})",
-                    callback_data=f"vac_{vacancy_index + 1}")
-            ])
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
         await context.bot.send_message(chat_id=user_id,
                                        text="Что сделать?",
-                                       reply_markup=reply_markup)
+                                       reply_markup=get_vacancy_action_keyboard())
         return STEP_VACANCY
 
     except Exception as e:
         logger.error(f"Error getting vacancy details: {e}")
         await context.bot.send_message(chat_id=user_id,
-                                       text=f"Ошибка: {str(e)}")
+                                       text=f"Ошибка: {str(e)}",
+                                       reply_markup=get_vacancy_action_keyboard())
         return STEP_VACANCY
 
 
@@ -1064,7 +1054,7 @@ async def generate_cover_letter(update: Update,
         await context.bot.send_message(
             chat_id=user_id,
             text=f"Ссылка: {vacancy.get('alternate_url', '')}\n\n"
-            "Скопируй письмо и отправь на hh.ru",
+            "Скопируй и отправь сопроводительное письмо",
             reply_markup=get_vacancy_action_keyboard())
 
         if show_upsell:
@@ -1083,9 +1073,10 @@ async def generate_cover_letter(update: Update,
 
     except Exception as e:
         logger.error(f"Error generating cover letter: {e}")
-        await context.bot.send_message(chat_id=user_id,
-                                       text=f"Ошибка генерации: {str(e)}",
-                                       reply_markup=get_vacancy_action_keyboard())
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"Ошибка генерации: {str(e)}",
+            reply_markup=get_vacancy_action_keyboard())
         return STEP_VACANCY
 
 
@@ -1195,9 +1186,10 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=f"**Рекомендации по адаптации резюме:**\n\n{recommendations}",
             parse_mode='Markdown')
 
-        await context.bot.send_message(chat_id=user_id,
-                                       text="Что дальше?",
-                                       reply_markup=get_vacancy_action_keyboard())
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="Что дальше?",
+            reply_markup=get_vacancy_action_keyboard())
 
         if show_upsell:
             upsell_kb = InlineKeyboardMarkup([[
@@ -1215,9 +1207,10 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Error adapting resume: {e}")
-        await context.bot.send_message(chat_id=user_id,
-                                       text=f"Ошибка анализа: {str(e)}",
-                                       reply_markup=get_vacancy_action_keyboard())
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"Ошибка анализа: {str(e)}",
+            reply_markup=get_vacancy_action_keyboard())
         return STEP_VACANCY
 
 
@@ -1445,17 +1438,9 @@ def main():
 
     async def fallback_document(update: Update,
                                 context: ContextTypes.DEFAULT_TYPE):
-        """Handle documents sent outside of conversation - restart flow"""
-        user_id = update.effective_user.id
-        logger.info(f"Fallback document handler for user {user_id}")
-        user_data_store[user_id] = {
-            'resume': None,
-            'preferences': {},
-            'vacancies': [],
-            'current_vacancy': None,
-            'current_vacancy_index': 0
-        }
-        return await receive_resume(update, context)
+        """Handle documents sent outside of conversation - tell user to /start"""
+        await update.message.reply_text(
+            "Чтобы загрузить резюме, сначала нажми /start")
 
     application.add_handler(
         MessageHandler(filters.Document.ALL, fallback_document))
