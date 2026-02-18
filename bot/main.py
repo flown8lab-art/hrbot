@@ -46,7 +46,12 @@ HEADERS = {
 
 def get_user(user_id):
     if user_id not in users_db:
-        users_db[user_id] = {"credits": 3, "turbo_until": None, "purchased_start": False, "used_after_start": 0}
+        users_db[user_id] = {
+            "credits": 3,
+            "turbo_until": None,
+            "purchased_start": False,
+            "used_after_start": 0
+        }
     return users_db[user_id]
 
 
@@ -66,7 +71,8 @@ def use_credit(user_id):
     user["credits"] -= 1
     if user.get("purchased_start"):
         user["used_after_start"] = user.get("used_after_start", 0) + 1
-    return user.get("purchased_start") and user.get("used_after_start") in (3, 4)
+    return user.get("purchased_start") and user.get("used_after_start") in (3,
+                                                                            4)
 
 
 def get_tariff_keyboard():
@@ -75,8 +81,9 @@ def get_tariff_keyboard():
                              callback_data="buy_start")
     ],
                 [
-                    InlineKeyboardButton("🔥 Active — 750₽ (30 откликов, лучший выбор)",
-                                         callback_data="buy_active")
+                    InlineKeyboardButton(
+                        "🔥 Active — 750₽ (30 откликов, лучший выбор)",
+                        callback_data="buy_active")
                 ],
                 [
                     InlineKeyboardButton("Turbo — 1990₽ (30 дней)",
@@ -176,7 +183,9 @@ async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    logger.info(f"receive_resume called for user {user_id}, document={update.message.document is not None if update.message else 'no message'}")
+    logger.info(
+        f"receive_resume called for user {user_id}, document={update.message.document is not None if update.message else 'no message'}"
+    )
     resume_text = None
 
     if user_id not in user_data_store:
@@ -242,9 +251,9 @@ async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_data_store[user_id]['resume'] = resume_text.strip()
 
-    skip_kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Пропустить ➡️", callback_data="skip_preferences")]
-    ])
+    skip_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("Пропустить ➡️", callback_data="skip_preferences")
+    ]])
     await update.message.reply_text(
         f"Резюме загружено ({len(resume_text)} символов)\n\n"
         "**Шаг 2 из 3**: Опиши свои пожелания к вакансии\n\n"
@@ -326,7 +335,8 @@ async def receive_preferences(update: Update,
     return STEP_SEARCH
 
 
-async def skip_preferences_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def skip_preferences_callback(update: Update,
+                                    context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = update.effective_user.id
@@ -348,14 +358,21 @@ async def skip_preferences_callback(update: Update, context: ContextTypes.DEFAUL
 
 
 ROLE_GROUPS = {
-    'менеджер': ['менеджер', 'manager', 'руководитель', 'управляющий', 'тимлид', 'team lead'],
-    'разработчик': ['разработчик', 'developer', 'программист', 'engineer', 'инженер-программист', 'software'],
+    'менеджер': [
+        'менеджер', 'manager', 'руководитель', 'управляющий', 'тимлид',
+        'team lead'
+    ],
+    'разработчик': [
+        'разработчик', 'developer', 'программист', 'engineer',
+        'инженер-программист', 'software'
+    ],
     'аналитик': ['аналитик', 'analyst', 'data analyst', 'бизнес-аналитик'],
     'дизайнер': ['дизайнер', 'designer', 'ui', 'ux', 'верстальщик'],
     'маркетолог': ['маркетолог', 'marketing', 'seo', 'smm', 'контент'],
     'бухгалтер': ['бухгалтер', 'accountant', 'финансист', 'экономист'],
     'hr': ['hr', 'рекрутер', 'кадр', 'подбор персонала'],
-    'devops': ['devops', 'sre', 'системный администратор', 'sysadmin', 'инфраструктур'],
+    'devops':
+    ['devops', 'sre', 'системный администратор', 'sysadmin', 'инфраструктур'],
     'тестировщик': ['тестировщик', 'qa', 'tester', 'quality assurance'],
     'продажи': ['продаж', 'sales', 'торговый', 'продавец'],
 }
@@ -379,7 +396,8 @@ def _get_role(text: str) -> str:
 
 def calculate_score(vacancy: dict, query_tokens: list) -> int:
     title = vacancy.get('name', '').lower()
-    description = vacancy.get('full_text', '') or vacancy.get('snippet', {}).get('requirement', '') or ''
+    description = vacancy.get('full_text', '') or vacancy.get(
+        'snippet', {}).get('requirement', '') or ''
     description = description.lower()
 
     score = 0
@@ -408,7 +426,8 @@ async def noop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def is_core_relevant(vacancy: dict, query_tokens: list) -> bool:
     title = vacancy.get('name', '').lower()
-    description = vacancy.get('full_text', '') or vacancy.get('snippet', {}).get('requirement', '') or ''
+    description = vacancy.get('full_text', '') or vacancy.get(
+        'snippet', {}).get('requirement', '') or ''
     description = description.lower()
     combined = title + ' ' + description
 
@@ -544,6 +563,15 @@ def _score_label(score: int) -> str:
     return "⚪"
 
 
+def get_vacancy_action_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✍️ Сопроводительное письмо", callback_data="gen_cover"),
+         InlineKeyboardButton("📄 Рекомендации по резюме", callback_data="adapt_resume")],
+        [InlineKeyboardButton("🔙 К списку вакансий", callback_data="back_to_list"),
+         InlineKeyboardButton("🔎 Новый поиск", callback_data="new_search")]
+    ])
+
+
 def build_vacancy_keyboard(vacancies: list,
                            page: int = 0,
                            page_size: int = 10) -> list:
@@ -559,7 +587,8 @@ def build_vacancy_keyboard(vacancies: list,
             return "🟡 Смежные"
         return "⚪ Дополнительно"
 
-    prev_group_global = _get_group(vacancies[start - 1].get('_score', 0)) if start > 0 else None
+    prev_group_global = _get_group(vacancies[start - 1].get(
+        '_score', 0)) if start > 0 else None
 
     keyboard = []
     for i, vac in enumerate(page_vacancies):
@@ -567,7 +596,10 @@ def build_vacancy_keyboard(vacancies: list,
         group = _get_group(vac.get('_score', 0))
 
         if group != prev_group_global:
-            keyboard.append([InlineKeyboardButton(f"— {group} —", callback_data=f"noop_{idx}")])
+            keyboard.append([
+                InlineKeyboardButton(f"— {group} —",
+                                     callback_data=f"noop_{idx}")
+            ])
             prev_group_global = group
 
         salary_text = ""
@@ -733,7 +765,11 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         groups_text = "\n".join(group_labels)
 
         user_data_store[user_id]['vacancies'] = vacancies
-        user_data_store[user_id]['vacancy_groups'] = {'hot': len(hot), 'mid': len(mid), 'low': len(low)}
+        user_data_store[user_id]['vacancy_groups'] = {
+            'hot': len(hot),
+            'mid': len(mid),
+            'low': len(low)
+        }
         user_data_store[user_id]['current_page'] = 0
         user_data_store[user_id]['total_found'] = len(vacancies)
         user_data_store[user_id]['source_text'] = source_text
@@ -929,14 +965,11 @@ async def generate_cover_letter(update: Update,
     if not has_access(user_id):
         await query.edit_message_text(
             "⚠️ Ты использовал 3 бесплатных AI-отклика.\n\n"
-
             "За это время:\n"
             "• Ты получил персонализированные письма\n"
             "• Увидел релевантные вакансии\n"
             "• Увеличил шанс приглашения\n\n"
-
             "Чтобы продолжить и не упустить свежие вакансии — выбери пакет                      ниже.\n\n"
-
             "Большинство пользователей находят работу в течение 2–4 недель активных             откликов.\n\n",
             parse_mode="HTML",
             reply_markup=get_tariff_keyboard())
@@ -1028,53 +1061,31 @@ async def generate_cover_letter(update: Update,
             text=f"**Сопроводительное письмо:**\n\n{cover_letter}",
             parse_mode='Markdown')
 
-        vacancies = user_data_store[user_id].get('vacancies', [])
-        current_idx = user_data_store[user_id].get('current_vacancy_index', 0)
-
-        keyboard = []
-        if current_idx + 1 < len(vacancies[:10]):
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"➡️ Следующая ({current_idx + 2} из {len(vacancies)})",
-                    callback_data=f"vac_{current_idx + 1}")
-            ])
-        keyboard.append([
-            InlineKeyboardButton("Назад к списку вакансий",
-                                 callback_data="back_to_list")
-        ])
-        keyboard.append(
-            [InlineKeyboardButton("Новый поиск", callback_data="new_search")])
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
         await context.bot.send_message(
             chat_id=user_id,
             text=f"Ссылка: {vacancy.get('alternate_url', '')}\n\n"
             "Скопируй письмо и отправь на hh.ru",
-            reply_markup=reply_markup)
+            reply_markup=get_vacancy_action_keyboard())
 
         if show_upsell:
-            upsell_kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔥 Active — 750₽ (30 откликов)", callback_data="buy_active")]
-            ])
+            upsell_kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔥 Active — 750₽ (30 откликов)",
+                                     callback_data="buy_active")
+            ]])
             await context.bot.send_message(
                 chat_id=user_id,
                 text="Ты активно откликаешься 🔥\n\n"
-                     "Active пакет даст 30 откликов и обойдётся дешевле за каждый отклик.\n"
-                     "Обновить тариф?",
+                "Active пакет даст 30 откликов и обойдётся дешевле за каждый отклик.\n"
+                "Обновить тариф?",
                 reply_markup=upsell_kb)
 
         return STEP_VACANCY
 
     except Exception as e:
         logger.error(f"Error generating cover letter: {e}")
-        keyboard = [[
-            InlineKeyboardButton("Назад к списку вакансий",
-                                 callback_data="back_to_list")
-        ], [InlineKeyboardButton("Новый поиск", callback_data="new_search")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
         await context.bot.send_message(chat_id=user_id,
                                        text=f"Ошибка генерации: {str(e)}",
-                                       reply_markup=reply_markup)
+                                       reply_markup=get_vacancy_action_keyboard())
         return STEP_VACANCY
 
 
@@ -1184,51 +1195,29 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=f"**Рекомендации по адаптации резюме:**\n\n{recommendations}",
             parse_mode='Markdown')
 
-        vacancies = user_data_store[user_id].get('vacancies', [])
-        current_idx = user_data_store[user_id].get('current_vacancy_index', 0)
-
-        keyboard = []
-        if current_idx + 1 < len(vacancies[:10]):
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"➡️ Следующая ({current_idx + 2} из {len(vacancies)})",
-                    callback_data=f"vac_{current_idx + 1}")
-            ])
-        keyboard.append([
-            InlineKeyboardButton("Назад к списку вакансий",
-                                 callback_data="back_to_list")
-        ])
-        keyboard.append(
-            [InlineKeyboardButton("Новый поиск", callback_data="new_search")])
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
         await context.bot.send_message(chat_id=user_id,
                                        text="Что дальше?",
-                                       reply_markup=reply_markup)
+                                       reply_markup=get_vacancy_action_keyboard())
 
         if show_upsell:
-            upsell_kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔥 Active — 750₽ (30 откликов)", callback_data="buy_active")]
-            ])
+            upsell_kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔥 Active — 750₽ (30 откликов)",
+                                     callback_data="buy_active")
+            ]])
             await context.bot.send_message(
                 chat_id=user_id,
                 text="Ты активно откликаешься 🔥\n\n"
-                     "Active пакет даст 30 откликов и обойдётся дешевле за каждый отклик.\n"
-                     "Обновить тариф?",
+                "Active пакет даст 30 откликов и обойдётся дешевле за каждый отклик.\n"
+                "Обновить тариф?",
                 reply_markup=upsell_kb)
 
         return STEP_VACANCY
 
     except Exception as e:
         logger.error(f"Error adapting resume: {e}")
-        keyboard = [[
-            InlineKeyboardButton("Назад к списку вакансий",
-                                 callback_data="back_to_list")
-        ], [InlineKeyboardButton("Новый поиск", callback_data="new_search")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
         await context.bot.send_message(chat_id=user_id,
                                        text=f"Ошибка анализа: {str(e)}",
-                                       reply_markup=reply_markup)
+                                       reply_markup=get_vacancy_action_keyboard())
         return STEP_VACANCY
 
 
@@ -1419,7 +1408,8 @@ def main():
                 MessageHandler(filters.Document.ALL, receive_resume)
             ],
             STEP_PREFERENCES: [
-                CallbackQueryHandler(skip_preferences_callback, pattern='^skip_preferences$'),
+                CallbackQueryHandler(skip_preferences_callback,
+                                     pattern='^skip_preferences$'),
                 MessageHandler(filters.TEXT & ~filters.COMMAND,
                                receive_preferences)
             ],
@@ -1453,17 +1443,22 @@ def main():
         CallbackQueryHandler(handle_buy_callback,
                              pattern=r'^buy_(start|active|turbo)$'))
 
-    async def fallback_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def fallback_document(update: Update,
+                                context: ContextTypes.DEFAULT_TYPE):
         """Handle documents sent outside of conversation - restart flow"""
         user_id = update.effective_user.id
         logger.info(f"Fallback document handler for user {user_id}")
         user_data_store[user_id] = {
-            'resume': None, 'preferences': {}, 'vacancies': [],
-            'current_vacancy': None, 'current_vacancy_index': 0
+            'resume': None,
+            'preferences': {},
+            'vacancies': [],
+            'current_vacancy': None,
+            'current_vacancy_index': 0
         }
         return await receive_resume(update, context)
 
-    application.add_handler(MessageHandler(filters.Document.ALL, fallback_document))
+    application.add_handler(
+        MessageHandler(filters.Document.ALL, fallback_document))
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('stats', stats_command))
     application.add_handler(CommandHandler('myid', myid_command))
