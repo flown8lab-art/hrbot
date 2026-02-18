@@ -343,6 +343,74 @@ async def skip_preferences_callback(update: Update, context: ContextTypes.DEFAUL
     return STEP_SEARCH
 
 
+ROLE_GROUPS = {
+    'менеджер': ['менеджер', 'manager', 'руководитель', 'управляющий', 'тимлид', 'team lead'],
+    'разработчик': ['разработчик', 'developer', 'программист', 'engineer', 'инженер-программист', 'software'],
+    'аналитик': ['аналитик', 'analyst', 'data analyst', 'бизнес-аналитик'],
+    'дизайнер': ['дизайнер', 'designer', 'ui', 'ux', 'верстальщик'],
+    'маркетолог': ['маркетолог', 'marketing', 'seo', 'smm', 'контент'],
+    'бухгалтер': ['бухгалтер', 'accountant', 'финансист', 'экономист'],
+    'hr': ['hr', 'рекрутер', 'кадр', 'подбор персонала'],
+    'devops': ['devops', 'sre', 'системный администратор', 'sysadmin', 'инфраструктур'],
+    'тестировщик': ['тестировщик', 'qa', 'tester', 'quality assurance'],
+    'продажи': ['продаж', 'sales', 'торговый', 'продавец'],
+}
+
+
+def normalize_query(query: str) -> list:
+    text = query.lower().strip()
+    text = ' '.join(text.split())
+    tokens = text.split()
+    filtered = [t for t in tokens if len(t) >= 2]
+    return filtered if filtered else tokens
+
+
+def _get_role(text: str) -> str:
+    text_lower = text.lower()
+    for role, keywords in ROLE_GROUPS.items():
+        if any(kw in text_lower for kw in keywords):
+            return role
+    return ''
+
+
+def calculate_score(vacancy: dict, query_tokens: list) -> int:
+    title = vacancy.get('name', '').lower()
+    description = vacancy.get('full_text', '') or vacancy.get('snippet', {}).get('requirement', '') or ''
+    description = description.lower()
+
+    score = 0
+    for token in query_tokens:
+        if token in title:
+            score += 5
+        if token in description:
+            score += 2
+
+    query_text = ' '.join(query_tokens)
+    query_role = _get_role(query_text)
+    title_role = _get_role(title)
+
+    if query_role and title_role:
+        if query_role == title_role:
+            score += 4
+        else:
+            score -= 3
+
+    return score
+
+
+async def noop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+
+
+def is_core_relevant(vacancy: dict, query_tokens: list) -> bool:
+    title = vacancy.get('name', '').lower()
+    description = vacancy.get('full_text', '') or vacancy.get('snippet', {}).get('requirement', '') or ''
+    description = description.lower()
+    combined = title + ' ' + description
+
+    return any(token in combined for token in query_tokens)
+
+
 JOB_SYNONYMS = {
     'менеджер проекта': [
         'менеджер проекта', 'менеджер проектов', 'project manager',
@@ -464,6 +532,14 @@ def search_telegram_vacancies(query: str, prefs: dict) -> list:
     return results[:20]
 
 
+def _score_label(score: int) -> str:
+    if score >= 8:
+        return "🔥"
+    elif score >= 4:
+        return "🟡"
+    return "⚪"
+
+
 def build_vacancy_keyboard(vacancies: list,
                            page: int = 0,
                            page_size: int = 10) -> list:
@@ -472,9 +548,24 @@ def build_vacancy_keyboard(vacancies: list,
     page_vacancies = vacancies[start:end]
     total_pages = (len(vacancies) + page_size - 1) // page_size
 
+    def _get_group(sc):
+        if sc >= 8:
+            return "🔥 Самые релевантные"
+        elif sc >= 4:
+            return "🟡 Смежные"
+        return "⚪ Дополнительно"
+
+    prev_group_global = _get_group(vacancies[start - 1].get('_score', 0)) if start > 0 else None
+
     keyboard = []
     for i, vac in enumerate(page_vacancies):
         idx = start + i
+        group = _get_group(vac.get('_score', 0))
+
+        if group != prev_group_global:
+            keyboard.append([InlineKeyboardButton(f"— {group} —", callback_data=f"noop_{idx}")])
+            prev_group_global = group
+
         salary_text = ""
         if vac.get('salary'):
             sal = vac['salary']
@@ -589,6 +680,32 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 unique_vacancies.append(vac)
         vacancies = unique_vacancies
 
+        query_tokens = normalize_query(query)
+
+        if query_tokens:
+            scored = []
+            for vac in vacancies:
+                if not is_core_relevant(vac, query_tokens):
+                    continue
+                sc = calculate_score(vac, query_tokens)
+                if sc > 0:
+                    vac['_score'] = sc
+                    scored.append(vac)
+
+            scored.sort(key=lambda v: v.get('_score', 0), reverse=True)
+            if scored:
+                vacancies = scored
+
+        if not vacancies:
+            await update.message.reply_text(
+                "Вакансий не найдено.\n"
+                "Попробуй изменить запрос или напиши новую должность:")
+            return STEP_SEARCH
+
+        for vac in vacancies:
+            if '_score' not in vac:
+                vac['_score'] = 5
+
         sources = []
         if hh_vacancies:
             sources.append(f"hh.ru: {len(hh_vacancies)}")
@@ -598,7 +715,21 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sources.append(f"Telegram: {len(tg_vacancies)}")
         source_text = " + ".join(sources) if sources else ""
 
+        hot = [v for v in vacancies if v.get('_score', 0) >= 8]
+        mid = [v for v in vacancies if 4 <= v.get('_score', 0) <= 7]
+        low = [v for v in vacancies if 1 <= v.get('_score', 0) <= 3]
+
+        group_labels = []
+        if hot:
+            group_labels.append(f"🔥 Самые релевантные: {len(hot)}")
+        if mid:
+            group_labels.append(f"🟡 Смежные: {len(mid)}")
+        if low:
+            group_labels.append(f"⚪ Дополнительно: {len(low)}")
+        groups_text = "\n".join(group_labels)
+
         user_data_store[user_id]['vacancies'] = vacancies
+        user_data_store[user_id]['vacancy_groups'] = {'hot': len(hot), 'mid': len(mid), 'low': len(low)}
         user_data_store[user_id]['current_page'] = 0
         user_data_store[user_id]['total_found'] = len(vacancies)
         user_data_store[user_id]['source_text'] = source_text
@@ -608,6 +739,7 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             f"Найдено {len(vacancies)} вакансий ({source_text})\n\n"
+            f"{groups_text}\n\n"
             "Нажми на вакансию для просмотра:",
             reply_markup=reply_markup)
         return STEP_VACANCY
@@ -1254,6 +1386,7 @@ def main():
                                search_vacancies)
             ],
             STEP_VACANCY: [
+                CallbackQueryHandler(noop_callback, pattern=r'^noop_'),
                 CallbackQueryHandler(vacancy_selected, pattern=r'^vac_\d+$'),
                 CallbackQueryHandler(vacancy_selected, pattern='^new_search$'),
                 CallbackQueryHandler(vacancy_selected,
