@@ -1448,13 +1448,13 @@ def main():
         allow_reentry=True)
 
     application.add_handler(conv_handler)
+    application.add_handler(
+        CallbackQueryHandler(handle_buy_callback,
+                             pattern=r'^buy_(start|active|turbo)$'))
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('stats', stats_command))
     application.add_handler(CommandHandler('myid', myid_command))
     application.add_handler(CommandHandler('buy', buy_command))
-    application.add_handler(
-        CallbackQueryHandler(handle_buy_callback,
-                             pattern=r'^buy_(start|active|turbo)$'))
     application.add_handler(
         MessageHandler(
             filters.Regex(r'(?i)^(start|active|turbo)$') & ~filters.COMMAND,
