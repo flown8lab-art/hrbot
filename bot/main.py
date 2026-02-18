@@ -834,6 +834,7 @@ async def vacancy_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     user_id = update.effective_user.id
+    logger.info(f"vacancy_selected: user={user_id}, data={query.data}")
 
     if query.data == "new_search":
         await query.edit_message_text("Введи новый поисковый запрос:")
@@ -1541,19 +1542,25 @@ def main():
 
     async def run_parser_periodically():
         """Run telegram parser every 12 hours"""
-        await asyncio.sleep(120)
+        await asyncio.sleep(300)
         while True:
             try:
                 logger.info("Starting scheduled parser run...")
-                import subprocess
-                result = subprocess.run(['python', 'bot/telegram_parser.py'],
-                                        capture_output=True,
-                                        text=True,
-                                        timeout=300)
-                if result.returncode == 0:
-                    logger.info("Parser completed successfully")
-                else:
-                    logger.error(f"Parser error: {result.stderr}")
+                proc = await asyncio.create_subprocess_exec(
+                    'python', 'bot/telegram_parser.py',
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE)
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(), timeout=300)
+                    if proc.returncode == 0:
+                        logger.info("Parser completed successfully")
+                    else:
+                        logger.error(
+                            f"Parser error: {stderr.decode()[:500]}")
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    logger.error("Parser timed out after 300s")
             except Exception as e:
                 logger.error(f"Parser exception: {e}")
             await asyncio.sleep(12 * 60 * 60)
