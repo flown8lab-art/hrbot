@@ -46,7 +46,7 @@ HEADERS = {
 
 def get_user(user_id):
     if user_id not in users_db:
-        users_db[user_id] = {"credits": 3, "turbo_until": None}
+        users_db[user_id] = {"credits": 3, "turbo_until": None, "purchased_start": False, "used_after_start": 0}
     return users_db[user_id]
 
 
@@ -62,8 +62,11 @@ def use_credit(user_id):
     user = get_user(user_id)
     if user["turbo_until"]:
         if datetime.now() < user["turbo_until"]:
-            return
+            return False
     user["credits"] -= 1
+    if user.get("purchased_start"):
+        user["used_after_start"] = user.get("used_after_start", 0) + 1
+    return user.get("purchased_start") and user.get("used_after_start") in (3, 4)
 
 
 def get_tariff_keyboard():
@@ -954,7 +957,7 @@ async def generate_cover_letter(update: Update,
             "Вакансия не выбрана. Начни заново: /start")
         return ConversationHandler.END
 
-    use_credit(user_id)
+    show_upsell = use_credit(user_id)
     await query.edit_message_text(
         "Генерирую сопроводительное письмо (10-20 сек)...")
 
@@ -1046,6 +1049,18 @@ async def generate_cover_letter(update: Update,
             text=f"Ссылка: {vacancy.get('alternate_url', '')}\n\n"
             "Скопируй письмо и отправь на hh.ru",
             reply_markup=reply_markup)
+
+        if show_upsell:
+            upsell_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔥 Active — 750₽ (30 откликов)", callback_data="buy_active")]
+            ])
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="Ты активно откликаешься 🔥\n\n"
+                     "Active пакет даст 30 откликов и обойдётся дешевле за каждый отклик.\n"
+                     "Обновить тариф?",
+                reply_markup=upsell_kb)
+
         return STEP_VACANCY
 
     except Exception as e:
@@ -1088,7 +1103,7 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       )
         return ConversationHandler.END
 
-    use_credit(user_id)
+    show_upsell = use_credit(user_id)
     await query.edit_message_text(
         "Анализирую и адаптирую резюме (10-20 сек)...")
 
@@ -1188,6 +1203,18 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=user_id,
                                        text="Что дальше?",
                                        reply_markup=reply_markup)
+
+        if show_upsell:
+            upsell_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔥 Active — 750₽ (30 откликов)", callback_data="buy_active")]
+            ])
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="Ты активно откликаешься 🔥\n\n"
+                     "Active пакет даст 30 откликов и обойдётся дешевле за каждый отклик.\n"
+                     "Обновить тариф?",
+                reply_markup=upsell_kb)
+
         return STEP_VACANCY
 
     except Exception as e:
@@ -1354,10 +1381,16 @@ async def successful_payment(update: Update,
 
     if payload == "start":
         user["credits"] += 10
+        user["purchased_start"] = True
+        user["used_after_start"] = 0
     elif payload == "active":
         user["credits"] += 30
+        user["purchased_start"] = False
+        user["used_after_start"] = 0
     elif payload == "turbo":
         user["turbo_until"] = datetime.now() + timedelta(days=30)
+        user["purchased_start"] = False
+        user["used_after_start"] = 0
 
     await update.message.reply_text(
         "Оплата прошла успешно ✅ Доступ активирован.")
