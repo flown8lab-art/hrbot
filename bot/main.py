@@ -33,8 +33,37 @@ ADMIN_ID = int(os.environ.get('ADMIN_ID', '0'))
 STEP_START, STEP_RESUME, STEP_PREFERENCES, STEP_SEARCH, STEP_VACANCY = range(5)
 
 user_data_store = {}
-users_db = {}
+USERS_DB_FILE = 'bot/users_db.json'
 STATS_FILE = 'bot/stats.json'
+
+
+def load_users_db():
+    try:
+        with open(USERS_DB_FILE, 'r') as f:
+            data = json.load(f)
+            for uid, u in data.items():
+                if u.get("turbo_until"):
+                    u["turbo_until"] = datetime.fromisoformat(u["turbo_until"])
+            return {int(k): v for k, v in data.items()}
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_users_db():
+    data = {}
+    for uid, u in users_db.items():
+        entry = dict(u)
+        if entry.get("turbo_until"):
+            entry["turbo_until"] = entry["turbo_until"].isoformat()
+        data[str(uid)] = entry
+    try:
+        with open(USERS_DB_FILE, 'w') as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Error saving users_db: {e}")
+
+
+users_db = load_users_db()
 
 HH_API_URL = "https://api.hh.ru"
 TRUDVSEM_API_URL = "http://opendata.trudvsem.ru/api/v1"
@@ -52,6 +81,7 @@ def get_user(user_id):
             "purchased_start": False,
             "used_after_start": 0
         }
+        save_users_db()
     return users_db[user_id]
 
 
@@ -71,6 +101,7 @@ def use_credit(user_id):
     user["credits"] -= 1
     if user.get("purchased_start"):
         user["used_after_start"] = user.get("used_after_start", 0) + 1
+    save_users_db()
     return user.get("purchased_start") and user.get("used_after_start") in (3,
                                                                             4)
 
@@ -1425,6 +1456,7 @@ async def successful_payment(update: Update,
         user["purchased_start"] = False
         user["used_after_start"] = 0
 
+    save_users_db()
     await update.message.reply_text(
         "Оплата прошла успешно ✅ Доступ активирован.")
 
