@@ -176,6 +176,7 @@ async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    logger.info(f"receive_resume called for user {user_id}, document={update.message.document is not None if update.message else 'no message'}")
     resume_text = None
 
     if user_id not in user_data_store:
@@ -1451,6 +1452,18 @@ def main():
     application.add_handler(
         CallbackQueryHandler(handle_buy_callback,
                              pattern=r'^buy_(start|active|turbo)$'))
+
+    async def fallback_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle documents sent outside of conversation - restart flow"""
+        user_id = update.effective_user.id
+        logger.info(f"Fallback document handler for user {user_id}")
+        user_data_store[user_id] = {
+            'resume': None, 'preferences': {}, 'vacancies': [],
+            'current_vacancy': None, 'current_vacancy_index': 0
+        }
+        return await receive_resume(update, context)
+
+    application.add_handler(MessageHandler(filters.Document.ALL, fallback_document))
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('stats', stats_command))
     application.add_handler(CommandHandler('myid', myid_command))
