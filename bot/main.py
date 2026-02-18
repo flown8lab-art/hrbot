@@ -743,6 +743,7 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"Найдено {len(vacancies)} вакансий ({source_text})\n\n"
             f"{groups_text}\n\n"
+            "⏳ Самые свежие вакансии разбирают в первые 48 часов.\n\n"
             "Нажми на вакансию для просмотра:",
             reply_markup=reply_markup)
         return STEP_VACANCY
