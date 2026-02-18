@@ -72,7 +72,7 @@ def get_tariff_keyboard():
                              callback_data="buy_start")
     ],
                 [
-                    InlineKeyboardButton("Active — 750₽ (30 откликов)",
+                    InlineKeyboardButton("🔥 Active — 750₽ (30 откликов, лучший выбор)",
                                          callback_data="buy_active")
                 ],
                 [
@@ -923,9 +923,16 @@ async def generate_cover_letter(update: Update,
 
     if not has_access(user_id):
         await query.edit_message_text(
-            "⚠️ Бесплатные 3 отклика использованы.\n\n"
-            "Чтобы продолжить и не терять актуальные вакансии, выбери пакет ниже.\n"
-            "Самые быстрые кандидаты получают приглашения первыми.",
+            "⚠️ Ты использовал 3 бесплатных AI-отклика.\n\n"
+
+            "За это время:\n"
+            "• Ты получил персонализированные письма\n"
+            "• Увидел релевантные вакансии\n"
+            "• Увеличил шанс приглашения\n\n"
+
+            "Чтобы продолжить и не упустить свежие вакансии — выбери пакет                      ниже.\n\n"
+
+            "Большинство пользователей находят работу в течение 2–4 недель активных             откликов.\n\n",
             parse_mode="HTML",
             reply_markup=get_tariff_keyboard())
         return STEP_VACANCY
