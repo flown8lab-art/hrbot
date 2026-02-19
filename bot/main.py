@@ -170,11 +170,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await message.reply_text(
         "<b>Найди работу быстрее и выделись среди сотен кандидатов</b> 🚀\n\n"
-        "Я анализирую твоё резюме и под каждую вакансию создаю персональный отклик, "
+        "Я анализирую твоё резюме и под каждую подходящую вакансию создаю персональный отклик, "
         "который увеличивает шанс приглашения на собеседование.\n\n"
         "Что ты получаешь:\n"
         "🔎 <b>Все вакансии с HH + 130 Telegram-каналов + РосРабота</b>\n"
-        "✍️ <b>AI-сопроводительное письмо под конкретные требования работодателя</b>\n"
+        "✍️ <b>Сопроводительное письмо под конкретные требования работодателя</b>\n"
         "📄 <b>Рекомендации по усилению резюме</b>\n\n"
         "🎁 <b>3 персональных отклика — бесплатно</b>\n"
         "После этого можно выбрать тариф и продолжить.\n\n"
@@ -958,22 +958,23 @@ async def vacancy_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                            text=vacancy_info,
                                            parse_mode='Markdown')
         except Exception:
-            await context.bot.send_message(chat_id=user_id,
-                                           text=vacancy_info)
+            await context.bot.send_message(chat_id=user_id, text=vacancy_info)
 
         user_data_store[user_id]['current_vacancy'] = vacancy_details
         user_data_store[user_id]['current_vacancy_index'] = vacancy_index
 
-        await context.bot.send_message(chat_id=user_id,
-                                       text="Что сделать?",
-                                       reply_markup=get_vacancy_action_keyboard())
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="Что сделать?",
+            reply_markup=get_vacancy_action_keyboard())
         return STEP_VACANCY
 
     except Exception as e:
         logger.error(f"Error getting vacancy details: {e}")
-        await context.bot.send_message(chat_id=user_id,
-                                       text=f"Ошибка: {str(e)}",
-                                       reply_markup=get_vacancy_action_keyboard())
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"Ошибка: {str(e)}",
+            reply_markup=get_vacancy_action_keyboard())
         return STEP_VACANCY
 
 
@@ -981,7 +982,8 @@ def detect_level(vacancy_text: str) -> str:
     text = vacancy_text.lower()
     if any(w in text for w in ["junior", "jun", "начина", "без опыта"]):
         return "junior"
-    if any(w in text for w in ["senior", "lead", "руковод", "5+ лет", "7+ лет"]):
+    if any(w in text
+           for w in ["senior", "lead", "руковод", "5+ лет", "7+ лет"]):
         return "senior"
     return "middle"
 
@@ -1000,8 +1002,7 @@ def get_cover_letter_system_prompt(level: str) -> str:
             "- акцент на обучаемость, мотивацию, реальные навыки\n"
             "- без высоких формулировок\n"
             "- писать просто и по делу\n"
-            'В конце: "Подробности — в резюме."'
-        )
+            'В конце: "Подробности — в резюме."')
     if level == "senior":
         return (
             "Ты пишешь краткое и уверенное сопроводительное письмо от лица опытного специалиста.\n\n"
@@ -1013,8 +1014,7 @@ def get_cover_letter_system_prompt(level: str) -> str:
             "- 4–6 абзацев\n"
             "- акцент на управлении, ответственности, результатах\n"
             "- звучать как человек, который выбирает проект, а не просит работу\n"
-            "В конце: нейтральное завершение."
-        )
+            "В конце: нейтральное завершение.")
     return (
         "Ты пишешь краткое, уверенное сопроводительное письмо от лица специалиста с опытом.\n\n"
         "Стиль:\n"
@@ -1025,8 +1025,7 @@ def get_cover_letter_system_prompt(level: str) -> str:
         "- 5–8 коротких абзацев\n"
         "- конкретные результаты вместо общих слов\n"
         "- не повторять текст вакансии\n"
-        'В конце: "Подробности — в резюме."'
-    )
+        'В конце: "Подробности — в резюме."')
 
 
 async def generate_cover_letter(update: Update,
@@ -1043,7 +1042,7 @@ async def generate_cover_letter(update: Update,
             "• Ты получил персонализированные письма\n"
             "• Увидел релевантные вакансии\n"
             "• Увеличил шанс приглашения\n\n"
-            "Чтобы продолжить и не упустить свежие вакансии — выбери пакет                      ниже.\n\n"
+            "Чтобы продолжить и не упустить свежие вакансии, выбери пакет                      ниже.\n\n"
             "Большинство пользователей находят работу в течение 2–4 недель активных             откликов.\n\n",
             parse_mode="HTML",
             reply_markup=get_tariff_keyboard())
@@ -1104,7 +1103,8 @@ async def generate_cover_letter(update: Update,
                         "X-Title": "HH Resume Helper"
                     },
                     json={
-                        "model": "openai/gpt-4o-mini",
+                        "model":
+                        "openai/gpt-4o-mini",
                         "messages": [{
                             "role": "system",
                             "content": system_prompt
@@ -1112,7 +1112,8 @@ async def generate_cover_letter(update: Update,
                             "role": "user",
                             "content": prompt
                         }],
-                        "max_tokens": 800
+                        "max_tokens":
+                        800
                     },
                     timeout=aiohttp.ClientTimeout(total=60)) as response:
                 result = await response.json()
@@ -1414,9 +1415,9 @@ async def handle_package(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     prices_map = {
-        "start": ("Start", 29000, 10),
-        "active": ("Active", 75000, 30),
-        "turbo": ("Turbo", 199000, None),
+        "start": ("Start", 290, 10),
+        "active": ("Active", 750, 30),
+        "turbo": ("Turbo", 1990, None),
     }
 
     title, amount, credits = prices_map[text]
@@ -1547,17 +1548,17 @@ def main():
             try:
                 logger.info("Starting scheduled parser run...")
                 proc = await asyncio.create_subprocess_exec(
-                    'python', 'bot/telegram_parser.py',
+                    'python',
+                    'bot/telegram_parser.py',
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE)
                 try:
-                    stdout, stderr = await asyncio.wait_for(
-                        proc.communicate(), timeout=300)
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(),
+                                                            timeout=300)
                     if proc.returncode == 0:
                         logger.info("Parser completed successfully")
                     else:
-                        logger.error(
-                            f"Parser error: {stderr.decode()[:500]}")
+                        logger.error(f"Parser error: {stderr.decode()[:500]}")
                 except asyncio.TimeoutError:
                     proc.kill()
                     logger.error("Parser timed out after 300s")
