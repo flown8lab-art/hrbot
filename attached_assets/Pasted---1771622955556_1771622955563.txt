@@ -1,0 +1,56 @@
+После того как разберетесь с возвратом, обязательно исправьте код. Вот минимально необходимые обработчики для корректного приема звезд (пример для библиотеки aiogram 3.x):
+
+python
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import Message, PreCheckoutQuery, SuccessfulPayment
+import asyncio
+
+# Токен бота
+BOT_TOKEN = "ВАШ_ТОКЕН_БОТА"
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+# Команда для выставления счета
+@dp.message(lambda message: message.text == "/buy")
+async def cmd_buy(message: Message):
+    await bot.send_invoice(
+        chat_id=message.chat.id,
+        title="Название товара",
+        description="Описание товара",
+        payload="unique_payload_123",  # Уникальный ID покупки
+        provider_token="",  # Для Stars обязательно пустая строка!
+        currency="XTR",  # Валюта - Telegram Stars
+        prices=[types.LabeledPrice(label="Товар", amount=25)],  # Цена в звездах
+    )
+
+# ОБЯЗАТЕЛЬНЫЙ обработчик pre_checkout_query
+@dp.pre_checkout_query()
+async def on_pre_checkout_query(pre_checkout_query: PreCheckoutQuery):
+    # Здесь можно проверить, есть ли товар в наличии и т.д.
+    # Если все ок:
+    await pre_checkout_query.answer(ok=True)
+    # Если что-то пошло не так:
+    # await pre_checkout_query.answer(ok=False, error_message="Товар временно недоступен")
+
+# Обработчик успешного платежа
+@dp.message(lambda message: message.successful_payment)
+async def on_successful_payment(message: Message):
+    payment: SuccessfulPayment = message.successful_payment
+    # Здесь логика выдачи товара пользователю
+    await message.answer(f"Спасибо за покупку! Ваш платеж на {payment.total_amount} {payment.currency} прошел успешно.")
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+Ключевые моменты в коде:
+
+provider_token="" — обязательно пустая строка .
+
+currency="XTR" — обязательно для звезд .
+
+Наличие @dp.pre_checkout_query() с answer(ok=True) .
+
+Обработчик successful_payment, где вы выдаете товар.
