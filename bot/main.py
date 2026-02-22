@@ -1342,7 +1342,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/buy — Оплатить тариф для дальнейшей работы\n"
         "/help — Справка\n"
         "/cancel — Отменить поиск\n\n"
-        "📎 Форматы резюме: PDF, DOCX, TXT",
+        "<b>Написать в поддержку</b> - @Tek_flow",
         parse_mode="HTML")
 
 
@@ -1435,7 +1435,9 @@ async def handle_package(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def precheckout_callback(update: Update,
                                context: ContextTypes.DEFAULT_TYPE):
     query = update.pre_checkout_query
-    logger.info(f"precheckout: user={query.from_user.id}, payload={query.invoice_payload}, amount={query.total_amount}")
+    logger.info(
+        f"precheckout: user={query.from_user.id}, payload={query.invoice_payload}, amount={query.total_amount}"
+    )
     await query.answer(ok=True)
 
 
@@ -1444,7 +1446,9 @@ async def successful_payment(update: Update,
     user_id = update.effective_user.id
     payment = update.message.successful_payment
     payload = payment.invoice_payload
-    logger.info(f"successful_payment: user={user_id}, payload={payload}, amount={payment.total_amount}")
+    logger.info(
+        f"successful_payment: user={user_id}, payload={payload}, amount={payment.total_amount}"
+    )
 
     user = get_user(user_id)
     old_credits = user.get("credits", 0)
@@ -1463,7 +1467,9 @@ async def successful_payment(update: Update,
         user["used_after_start"] = 0
 
     save_users_db()
-    logger.info(f"payment applied: user={user_id}, credits {old_credits} -> {user.get('credits', 0)}")
+    logger.info(
+        f"payment applied: user={user_id}, credits {old_credits} -> {user.get('credits', 0)}"
+    )
     await update.message.reply_text(
         "Оплата прошла успешно ✅ Доступ активирован.")
 
