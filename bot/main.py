@@ -82,7 +82,9 @@ def get_user(user_id):
             "purchased_start": False,
             "used_after_start": 0,
             "applied_vacancies": [],
-            "stats": {"total_applies": 0}
+            "stats": {
+                "total_applies": 0
+            }
         }
         save_users_db()
     else:
@@ -98,8 +100,7 @@ def clean_applied_history(user):
     now = int(time.time())
     THIRTY_DAYS = 30 * 24 * 60 * 60
     user["applied_vacancies"] = [
-        v for v in user["applied_vacancies"]
-        if now - v["ts"] <= THIRTY_DAYS
+        v for v in user["applied_vacancies"] if now - v["ts"] <= THIRTY_DAYS
     ]
     if len(user["applied_vacancies"]) > 200:
         user["applied_vacancies"] = user["applied_vacancies"][-200:]
@@ -233,11 +234,10 @@ async def mystats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = user["stats"].get("total_applies", 0)
     hidden = len(user["applied_vacancies"])
     credits = user.get("credits", 0)
-    await update.message.reply_text(
-        f"📊 Твоя статистика:\n\n"
-        f"Всего откликов: {total}\n"
-        f"Скрытых вакансий: {hidden}\n"
-        f"Кредитов осталось: {credits}")
+    await update.message.reply_text(f"📊 Твоя статистика:\n\n"
+                                    f"Всего откликов: {total}\n"
+                                    f"Скрытых вакансий: {hidden}\n"
+                                    f"Кредитов осталось: {credits}")
 
 
 async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -768,7 +768,10 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(user_id)
         clean_applied_history(user)
         applied_ids = {v["id"] for v in user["applied_vacancies"]}
-        vacancies = [vac for vac in vacancies if str(vac.get("id", "")) not in applied_ids]
+        vacancies = [
+            vac for vac in vacancies
+            if str(vac.get("id", "")) not in applied_ids
+        ]
 
         if not vacancies:
             await update.message.reply_text(
@@ -854,7 +857,11 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         hidden_count = len(applied_ids)
         if hidden_count > 0:
-            keyboard.append([InlineKeyboardButton(f"🔄 Показать снова все ({hidden_count} скрыто)", callback_data="reset_history")])
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"🔄 Показать снова все ({hidden_count} скрыто)",
+                    callback_data="reset_history")
+            ])
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
@@ -883,7 +890,9 @@ async def vacancy_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_user(user_id)
         user["applied_vacancies"] = []
         save_users_db()
-        await query.edit_message_text("История откликов очищена ✅\nВведи поисковый запрос, чтобы увидеть все вакансии:")
+        await query.edit_message_text(
+            "История откликов очищена ✅\nВведи поисковый запрос, чтобы увидеть все вакансии:"
+        )
         return STEP_SEARCH
 
     if query.data == "new_search":
@@ -1140,7 +1149,10 @@ async def generate_cover_letter(update: Update,
     if vac_id:
         existing_ids = [v["id"] for v in user["applied_vacancies"]]
         if vac_id not in existing_ids:
-            user["applied_vacancies"].append({"id": vac_id, "ts": int(time.time())})
+            user["applied_vacancies"].append({
+                "id": vac_id,
+                "ts": int(time.time())
+            })
             user["stats"]["total_applies"] += 1
             save_users_db()
 
@@ -1431,6 +1443,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def post_init(application):
     await application.bot.set_my_commands([("start", "Начать поиск работы"),
+                                           ("mystats", "Моя статистика"),
                                            ("buy", "Купить пакет откликов"),
                                            ("help", "Справка и возможности"),
                                            ("cancel", "Отменить текущий поиск")
@@ -1586,7 +1599,8 @@ def main():
                 CallbackQueryHandler(noop_callback, pattern=r'^noop_'),
                 CallbackQueryHandler(vacancy_selected, pattern=r'^vac_\d+$'),
                 CallbackQueryHandler(vacancy_selected, pattern='^new_search$'),
-                CallbackQueryHandler(vacancy_selected, pattern='^reset_history$'),
+                CallbackQueryHandler(vacancy_selected,
+                                     pattern='^reset_history$'),
                 CallbackQueryHandler(vacancy_selected,
                                      pattern='^back_search$'),
                 CallbackQueryHandler(vacancy_selected, pattern=r'^page_\d+$'),
