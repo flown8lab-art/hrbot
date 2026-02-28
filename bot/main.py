@@ -1675,6 +1675,14 @@ def main():
         async with application:
             await application.initialize()
             await application.start()
+            await application.bot.set_my_commands([
+                ("start", "Начать поиск работы"),
+                ("mystats", "Моя статистика"),
+                ("buy", "Купить пакет откликов"),
+                ("help", "Справка и возможности"),
+                ("cancel", "Отменить текущий поиск")
+            ])
+            logger.info("Bot commands menu updated")
             asyncio.create_task(run_parser_periodically())
             await application.updater.start_polling(
                 allowed_updates=Update.ALL_TYPES)
