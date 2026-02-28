@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import asyncio
+import time
 import aiohttp
 import requests
 from datetime import datetime, timedelta
@@ -79,10 +80,29 @@ def get_user(user_id):
             "credits": 3,
             "turbo_until": None,
             "purchased_start": False,
-            "used_after_start": 0
+            "used_after_start": 0,
+            "applied_vacancies": [],
+            "stats": {"total_applies": 0}
         }
         save_users_db()
+    else:
+        user = users_db[user_id]
+        if "applied_vacancies" not in user:
+            user["applied_vacancies"] = []
+        if "stats" not in user:
+            user["stats"] = {"total_applies": 0}
     return users_db[user_id]
+
+
+def clean_applied_history(user):
+    now = int(time.time())
+    THIRTY_DAYS = 30 * 24 * 60 * 60
+    user["applied_vacancies"] = [
+        v for v in user["applied_vacancies"]
+        if now - v["ts"] <= THIRTY_DAYS
+    ]
+    if len(user["applied_vacancies"]) > 200:
+        user["applied_vacancies"] = user["applied_vacancies"][-200:]
 
 
 def has_access(user_id):
@@ -108,17 +128,18 @@ def use_credit(user_id):
 
 def get_tariff_keyboard():
     keyboard = [[
-        InlineKeyboardButton("Start — 290₽ (10 откликов)",
+        InlineKeyboardButton("Start — 70 звёзд (20 откликов)",
                              callback_data="buy_start")
     ],
                 [
                     InlineKeyboardButton(
-                        "🔥 Active — 750₽ (30 откликов, лучший выбор)",
+                        "🔥 Active — 180 звёзд (60 откликов, лучший выбор)",
                         callback_data="buy_active")
                 ],
                 [
-                    InlineKeyboardButton("Turbo — 1990₽ (30 дней)",
-                                         callback_data="buy_turbo")
+                    InlineKeyboardButton(
+                        "Turbo — 330 звёзд (белимит на 30 дней)",
+                        callback_data="buy_turbo")
                 ]]
     return InlineKeyboardMarkup(keyboard)
 
@@ -173,9 +194,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Я анализирую твоё резюме и под каждую подходящую вакансию создаю персональный отклик, "
         "который увеличивает шанс приглашения на собеседование.\n\n"
         "Что ты получаешь:\n"
-        "🔎 <b>Все вакансии с HH + 130 Telegram-каналов + РосРабота</b>\n"
-        "✍️ <b>Сопроводительное письмо под конкретные требования работодателя</b>\n"
-        "📄 <b>Рекомендации по усилению резюме</b>\n\n"
+        "🔎 <b>Не трать время на поиск</b> — все актуальные вакансии из 130+ источников уже собраны для тебя.\n"
+        "✍️ <b>Твой отклик выделит тебя среди толпы</b> — я составляю письмо, идеально сочетая твои навыки с требованиями работодателя.\n"
+        "📄 <b>Резюме, которое работает само</b> — получи рекомендации, как усилить его, чтобы попадать в топ даже без отклика.\n\n"
         "🎁 <b>3 персональных отклика — бесплатно</b>\n"
         "После этого можно выбрать тариф и продолжить.\n\n"
         "— — —\n\n"
@@ -204,6 +225,19 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔍 Всего поисков: {total_searches}\n"
         f"📅 Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}",
         parse_mode='Markdown')
+
+
+async def mystats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    user = get_user(user_id)
+    total = user["stats"].get("total_applies", 0)
+    hidden = len(user["applied_vacancies"])
+    credits = user.get("credits", 0)
+    await update.message.reply_text(
+        f"📊 Твоя статистика:\n\n"
+        f"Всего откликов: {total}\n"
+        f"Скрытых вакансий: {hidden}\n"
+        f"Кредитов осталось: {credits}")
 
 
 async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -360,7 +394,7 @@ async def receive_preferences(update: Update,
     await update.message.reply_text(
         f"Фильтры: {pref_summary}\n\n"
         "**Шаг 3 из 3**: Поиск вакансий\n\n"
-        "Введи должность для поиска:\n"
+        "Напиши должность для поиска:\n"
         "Например: «менеджер проекта» или «Python разработчик»",
         parse_mode='Markdown')
     return STEP_SEARCH
@@ -382,7 +416,7 @@ async def skip_preferences_callback(update: Update,
     await query.edit_message_text(
         "Фильтры: без фильтров\n\n"
         "**Шаг 3 из 3**: Поиск вакансий\n\n"
-        "Введи должность для поиска:\n"
+        "Напиши должность для поиска:\n"
         "Например: «менеджер проекта» или «Python разработчик»",
         parse_mode='Markdown')
     return STEP_SEARCH
@@ -731,6 +765,11 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         vacancies = hh_vacancies + tv_vacancies + tg_vacancies
 
+        user = get_user(user_id)
+        clean_applied_history(user)
+        applied_ids = {v["id"] for v in user["applied_vacancies"]}
+        vacancies = [vac for vac in vacancies if str(vac.get("id", "")) not in applied_ids]
+
         if not vacancies:
             await update.message.reply_text(
                 "Вакансии не найдены.\n"
@@ -813,6 +852,10 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = build_vacancy_keyboard(vacancies, 0)
 
+        hidden_count = len(applied_ids)
+        if hidden_count > 0:
+            keyboard.append([InlineKeyboardButton(f"🔄 Показать снова все ({hidden_count} скрыто)", callback_data="reset_history")])
+
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             f"Найдено {len(vacancies)} вакансий ({source_text})\n\n"
@@ -836,12 +879,23 @@ async def vacancy_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"vacancy_selected: user={user_id}, data={query.data}")
 
+    if query.data == "reset_history":
+        user = get_user(user_id)
+        user["applied_vacancies"] = []
+        save_users_db()
+        await query.edit_message_text("История откликов очищена ✅\nВведи поисковый запрос, чтобы увидеть все вакансии:")
+        return STEP_SEARCH
+
     if query.data == "new_search":
-        await query.edit_message_text("Введи новый поисковый запрос:")
+        await query.edit_message_text(
+            "Напиши должность для поиска:\n"
+            "Например: «менеджер проекта» или «Python разработчик»")
         return STEP_SEARCH
 
     if query.data == "back_search":
-        await query.edit_message_text("Введи новый поисковый запрос:")
+        await query.edit_message_text(
+            "Напиши должность для поиска:\n"
+            "Например: «менеджер проекта» или «Python разработчик»")
         return STEP_SEARCH
 
     if query.data.startswith("page_"):
@@ -991,40 +1045,53 @@ def detect_level(vacancy_text: str) -> str:
 def get_cover_letter_system_prompt(level: str) -> str:
     if level == "junior":
         return (
-            "Ты пишешь краткое, живое сопроводительное письмо от лица начинающего специалиста.\n\n"
+            "Ты пишешь краткое сопроводительное письмо от лица начинающего специалиста.\n\n"
+            "Строгие правила:\n"
+            "1. Письмо ВСЕГДА начинается с 'Добрый день,' или 'Здравствуйте,'\n"
+            "2. Нельзя начинать письмо с 'Я заинтересован', 'Хочу откликнуться', "
+            "'Увидел вакансию', 'Обращаюсь по поводу вакансии'\n"
+            "3. Никаких вводных фраз перед приветствием\n\n"
             "Стиль:\n"
             "- естественный\n"
             "- без пафоса\n"
             "- без канцелярита\n"
             "- без заискивания\n"
-            '- без фраз "увидел вакансию"\n'
             "- 4–6 коротких абзацев\n"
-            "- акцент на обучаемость, мотивацию, реальные навыки\n"
-            "- без высоких формулировок\n"
-            "- писать просто и по делу\n"
+            "- акцент на обучаемость, мотивацию и реальные навыки\n"
+            "- писать просто и по делу\n\n"
             'В конце: "Подробности — в резюме."')
     if level == "senior":
         return (
             "Ты пишешь краткое и уверенное сопроводительное письмо от лица опытного специалиста.\n\n"
+            "Строгие правила:\n"
+            "1. Письмо ВСЕГДА начинается с 'Добрый день,' или 'Здравствуйте,'\n"
+            "2. Нельзя использовать фразы: 'Я заинтересован', 'Увидел вакансию', "
+            "'Хочу откликнуться', 'Буду рад внести вклад'\n"
+            "3. Не писать объяснений очевидного\n"
+            "4. Никаких оправданий или просьб\n\n"
             "Стиль:\n"
             "- прямой\n"
+            "- уверенный\n"
             "- без лишней вежливости\n"
-            "- без пафоса\n"
-            "- без объяснений очевидного\n"
             "- 4–6 абзацев\n"
-            "- акцент на управлении, ответственности, результатах\n"
-            "- звучать как человек, который выбирает проект, а не просит работу\n"
-            "В конце: нейтральное завершение.")
+            "- акцент на масштабе проектов, ответственности и результатах\n"
+            "- звучать как специалист, который выбирает проект\n\n"
+            "Завершение — нейтральное предложение обсудить детали.")
     return (
-        "Ты пишешь краткое, уверенное сопроводительное письмо от лица специалиста с опытом.\n\n"
+        "Ты пишешь краткое сопроводительное письмо от лица специалиста с опытом.\n\n"
+        "Строгие правила:\n"
+        "1. Письмо ВСЕГДА начинается с 'Добрый день,' или 'Здравствуйте,'\n"
+        "2. Запрещены формулировки: 'Я заинтересован', 'Увидел вакансию', "
+        "'Хочу откликнуться', 'Буду рад внести вклад'\n"
+        "3. Не повторять формулировки из вакансии\n"
+        "4. Не писать вводных фраз перед приветствием\n\n"
         "Стиль:\n"
         "- деловой, спокойный\n"
         "- без канцелярита\n"
-        "- без лести и заискивания\n"
-        '- без фраз "буду рад внести вклад"\n'
-        "- 5–8 коротких абзацев\n"
-        "- конкретные результаты вместо общих слов\n"
-        "- не повторять текст вакансии\n"
+        "- без лести\n"
+        "- 5–7 коротких абзацев\n"
+        "- конкретные достижения и цифры\n"
+        "- фокус на ценности для компании\n\n"
         'В конце: "Подробности — в резюме."')
 
 
@@ -1066,6 +1133,17 @@ async def generate_cover_letter(update: Update,
         return ConversationHandler.END
 
     show_upsell = use_credit(user_id)
+
+    user = get_user(user_id)
+    clean_applied_history(user)
+    vac_id = str(vacancy.get('id', ''))
+    if vac_id:
+        existing_ids = [v["id"] for v in user["applied_vacancies"]]
+        if vac_id not in existing_ids:
+            user["applied_vacancies"].append({"id": vac_id, "ts": int(time.time())})
+            user["stats"]["total_applies"] += 1
+            save_users_db()
+
     await query.edit_message_text(
         "Генерирую сопроводительное письмо (10-20 сек)...")
 
@@ -1104,7 +1182,7 @@ async def generate_cover_letter(update: Update,
                     },
                     json={
                         "model":
-                        "openai/gpt-4o-mini",
+                        "openai/gpt-4o",
                         "messages": [{
                             "role": "system",
                             "content": system_prompt
@@ -1141,13 +1219,13 @@ async def generate_cover_letter(update: Update,
 
         if show_upsell:
             upsell_kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔥 Active — 750₽ (30 откликов)",
+                InlineKeyboardButton("🔥 Active — 180 звёзд (60 откликов)",
                                      callback_data="buy_active")
             ]])
             await context.bot.send_message(
                 chat_id=user_id,
                 text="Ты активно откликаешься 🔥\n\n"
-                "Active пакет даст 30 откликов и обойдётся дешевле за каждый отклик.\n"
+                "Active пакет даст 60 откликов и обойдётся дешевле за каждый отклик.\n"
                 "Обновить тариф?",
                 reply_markup=upsell_kb)
 
@@ -1243,7 +1321,7 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "X-Title": "HH Resume Helper"
                     },
                     json={
-                        "model": "openai/gpt-4o-mini",
+                        "model": "openai/gpt-4o",
                         "messages": [{
                             "role": "user",
                             "content": prompt
@@ -1275,13 +1353,13 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if show_upsell:
             upsell_kb = InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔥 Active — 750₽ (30 откликов)",
+                InlineKeyboardButton("🔥 Active — 180 звёзд (60 откликов)",
                                      callback_data="buy_active")
             ]])
             await context.bot.send_message(
                 chat_id=user_id,
                 text="Ты активно откликаешься 🔥\n\n"
-                "Active пакет даст 30 откликов и обойдётся дешевле за каждый отклик.\n"
+                "Active пакет даст 60 откликов и обойдётся дешевле за каждый отклик.\n"
                 "Обновить тариф?",
                 reply_markup=upsell_kb)
 
@@ -1335,7 +1413,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>Как пользоваться:</b>\n"
         "1️⃣ Загрузи резюме (PDF, Word или текст)\n"
         "2️⃣ Укажи пожелания (например: «удалёнка, от 150к»)\n"
-        "3️⃣ Введи должность для поиска\n"
+        "3️⃣ Напиши должность для поиска\n"
         "4️⃣ Выбери вакансию и получи сопроводительное письмо\n\n"
         "<b>Команды:</b>\n"
         "/start — Начать поиск работы\n"
@@ -1368,11 +1446,11 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💼 <b>Выбери пакет и продолжай откликаться без ограничений</b>\n\n"
         "Ты уже увидел, как работает персонализация откликов.\n"
         "Теперь можно масштабировать результат.\n\n"
-        "📦 <b>Start</b> — 290₽\n"
-        "10 AI-откликов\n\n"
-        "🚀 <b>Active</b> — 750₽\n"
-        "30 AI-откликов (лучший баланс цены и результата)\n\n"
-        "🔥 <b>Turbo</b> — 1990₽\n"
+        "📦 <b>Start</b> — <b>70 звёзд</b>\n"
+        "20 AI-откликов\n\n"
+        "🚀 <b>Active</b> — <b>180 звёзд</b>\n"
+        "60 AI-откликов (лучший баланс цены и результата)\n\n"
+        "🔥 <b>Turbo</b> — <b>330 звёзд</b>\n"
         "Безлимит откликов на 30 дней\n\n"
         "Чем больше откликов — тем выше шанс получить оффер.\n",
         parse_mode="HTML",
@@ -1387,9 +1465,9 @@ async def handle_buy_callback(update: Update,
     pkg = query.data.replace("buy_", "")
 
     prices_map = {
-        "start": ("Start", 160, 10),
-        "active": ("Active", 420, 30),
-        "turbo": ("Turbo", 1100, None),
+        "start": ("Start", 70, 20),
+        "active": ("Active", 180, 60),
+        "turbo": ("Turbo", 330, None),
     }
 
     if pkg not in prices_map:
@@ -1415,9 +1493,9 @@ async def handle_package(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     prices_map = {
-        "start": ("Start", 290, 10),
-        "active": ("Active", 750, 30),
-        "turbo": ("Turbo", 1990, None),
+        "start": ("Start", 70, 20),
+        "active": ("Active", 180, 30),
+        "turbo": ("Turbo", 330, None),
     }
 
     title, amount, credits = prices_map[text]
@@ -1454,11 +1532,11 @@ async def successful_payment(update: Update,
     old_credits = user.get("credits", 0)
 
     if payload == "start":
-        user["credits"] += 10
+        user["credits"] += 20
         user["purchased_start"] = True
         user["used_after_start"] = 0
     elif payload == "active":
-        user["credits"] += 30
+        user["credits"] += 60
         user["purchased_start"] = False
         user["used_after_start"] = 0
     elif payload == "turbo":
@@ -1508,6 +1586,7 @@ def main():
                 CallbackQueryHandler(noop_callback, pattern=r'^noop_'),
                 CallbackQueryHandler(vacancy_selected, pattern=r'^vac_\d+$'),
                 CallbackQueryHandler(vacancy_selected, pattern='^new_search$'),
+                CallbackQueryHandler(vacancy_selected, pattern='^reset_history$'),
                 CallbackQueryHandler(vacancy_selected,
                                      pattern='^back_search$'),
                 CallbackQueryHandler(vacancy_selected, pattern=r'^page_\d+$'),
@@ -1541,6 +1620,7 @@ def main():
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('stats', stats_command))
     application.add_handler(CommandHandler('myid', myid_command))
+    application.add_handler(CommandHandler('mystats', mystats_command))
     application.add_handler(CommandHandler('buy', buy_command))
     application.add_handler(
         MessageHandler(

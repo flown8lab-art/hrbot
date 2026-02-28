@@ -1,0 +1,126 @@
+✅ ШАГ 1. Обновляем структуру пользователя
+🔹 Полностью замени get_user
+def get_user(user_id):
+    if user_id not in users_db:
+        users_db[user_id] = {
+            "credits": 3,
+            "turbo_until": None,
+            "purchased_start": False,
+            "used_after_start": 0,
+            "applied_vacancies": [],  # [{id: str, ts: int}]
+            "stats": {
+                "total_applies": 0
+            }
+        }
+        save_users_db()
+    else:
+        user = users_db[user_id]
+
+        if "applied_vacancies" not in user:
+            user["applied_vacancies"] = []
+
+        if "stats" not in user:
+            user["stats"] = {"total_applies": 0}
+
+        save_users_db()
+
+    return users_db[user_id]
+✅ ШАГ 2. Добавляем очистку старых вакансий (TTL + лимит)
+🔹 Добавь эту функцию рядом с get_user
+import time
+
+def clean_applied_history(user):
+    now = int(time.time())
+    THIRTY_DAYS = 30 * 24 * 60 * 60
+
+    # Удаляем старше 30 дней
+    user["applied_vacancies"] = [
+        v for v in user["applied_vacancies"]
+        if now - v["ts"] <= THIRTY_DAYS
+    ]
+
+    # Ограничение 200 записей
+    if len(user["applied_vacancies"]) > 200:
+        user["applied_vacancies"] = user["applied_vacancies"][-200:]
+
+    save_users_db()
+✅ ШАГ 3. Обновляем generate_cover_letter
+🔹 После строки:
+show_upsell = use_credit(user_id)
+
+Вставь:
+
+import time
+
+user = get_user(user_id)
+clean_applied_history(user)
+
+vacancy = user_data_store[user_id].get('current_vacancy')
+
+if vacancy:
+    vac_id = vacancy.get('id')
+
+    if vac_id:
+        # Проверяем, нет ли уже в истории
+        existing_ids = [v["id"] for v in user["applied_vacancies"]]
+
+        if vac_id not in existing_ids:
+            user["applied_vacancies"].append({
+                "id": vac_id,
+                "ts": int(time.time())
+            })
+
+            user["stats"]["total_applies"] += 1
+            save_users_db()
+✅ ШАГ 4. Обновляем search_vacancies
+🔹 Найди:
+vacancies = hh_vacancies + tv_vacancies + tg_vacancies
+🔹 И замени на:
+vacancies = hh_vacancies + tv_vacancies + tg_vacancies
+
+user = get_user(user_id)
+clean_applied_history(user)
+
+applied_ids = {v["id"] for v in user["applied_vacancies"]}
+
+filtered_vacancies = [
+    vac for vac in vacancies
+    if vac.get("id") not in applied_ids
+]
+
+vacancies = filtered_vacancies
+✅ ШАГ 5. Добавляем кнопку “Показать снова”
+🔹 В месте где создаёшь клавиатуру после поиска вакансий
+
+Добавь кнопку:
+
+InlineKeyboardButton("🔄 Показать снова все", callback_data="reset_history")
+✅ ШАГ 6. Обработчик кнопки сброса
+
+Добавь в блок обработки callback:
+
+elif call.data == "reset_history":
+    user = get_user(user_id)
+    user["applied_vacancies"] = []
+    save_users_db()
+
+    bot.answer_callback_query(call.id, "История откликов очищена")
+    bot.send_message(user_id, "Теперь будут показаны все вакансии.")
+✅ ШАГ 7. Добавляем команду аналитики
+
+Добавь хендлер:
+
+@bot.message_handler(commands=["stats"])
+def show_stats(message):
+    user_id = str(message.from_user.id)
+    user = get_user(user_id)
+
+    total = user["stats"].get("total_applies", 0)
+    hidden = len(user["applied_vacancies"])
+
+    bot.send_message(
+        user_id,
+        f"📊 Статистика:\n\n"
+        f"Всего откликов: {total}\n"
+        f"Скрытых вакансий: {hidden}"
+    )
