@@ -1430,9 +1430,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>Команды:</b>\n"
         "/start — Начать поиск работы\n"
         "/buy — Оплатить тариф для дальнейшей работы\n"
+        "/mystats — Твоя статистика\n"
         "/help — Справка\n"
         "/cancel — Отменить поиск\n\n"
-        "<b>Написать в поддержку</b> - @Tek_flow",
+        "<b>Задать вопрос в поддержку или написать пожелание</b> - @Tek_flow",
         parse_mode="HTML")
 
 
@@ -1443,7 +1444,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def post_init(application):
     await application.bot.set_my_commands([("start", "Начать поиск работы"),
-                                           ("mystats", "Моя статистика"),
                                            ("buy", "Купить пакет откликов"),
                                            ("help", "Справка и возможности"),
                                            ("cancel", "Отменить текущий поиск")
