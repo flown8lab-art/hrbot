@@ -1158,57 +1158,159 @@ def detect_level(vacancy_text: str) -> str:
     return "middle"
 
 
+RESUME_STRUCTURING_PROMPT = """
+Ты HR-аналитик.
+
+Извлеки из резюме СТРОГО ФАКТЫ.
+
+❗ Не додумывай.
+❗ Если нет данных — пиши null.
+
+Верни JSON строго в формате:
+
+{
+  "role": "",
+  "total_experience_years": "",
+  "hard_skills": [],
+  "soft_skills": [],
+  "achievements": [
+    {
+      "description": "",
+      "metrics": ""
+    }
+  ],
+  "tools": [],
+  "industries": [],
+  "management_experience": "",
+  "notable_projects": []
+}
+
+Используй только информацию из текста.
+"""
+
+VACANCY_ANALYSIS_PROMPT = """
+Ты HR-аналитик.
+
+Проанализируй вакансию и верни JSON:
+
+{
+  "required_skills": [],
+  "preferred_skills": [],
+  "required_experience": "",
+  "main_tasks": [],
+  "business_goals": [],
+  "keywords": []
+}
+
+Не интерпретируй. Только факты из вакансии.
+"""
+
+
+async def call_openrouter(system_prompt: str, user_prompt: str, max_tokens: int = 800) -> str:
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://replit.com",
+                    "X-Title": "HH Resume Helper"
+                },
+                json={
+                    "model": "openai/gpt-4o",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "max_tokens": max_tokens
+                },
+                timeout=aiohttp.ClientTimeout(total=60)) as response:
+            result = await response.json()
+
+    if 'error' in result:
+        raise Exception(f"API: {result['error'].get('message', result['error'])}")
+    if 'choices' not in result or not result['choices']:
+        raise Exception("Неожиданный ответ API")
+    return result['choices'][0]['message']['content']
+
+
 def get_cover_letter_system_prompt(level: str) -> str:
+    base_rules = """
+Ты карьерный стратег и executive copywriter.
+Ты пишешь сопроводительное письмо ТОЛЬКО на основе фактов из резюме.
+
+КРИТИЧЕСКИЕ ПРАВИЛА:
+
+1. Запрещено:
+- придумывать цифры
+- добавлять навыки, которых нет в резюме
+- додумывать результаты
+- писать общие фразы без фактов
+
+2. Если в резюме нет цифр — не выдумывай их.
+3. Каждое достижение должно содержать:
+   → действие
+   → измеримый результат (если есть)
+   → бизнес-эффект
+
+4. После каждого достижения делай ВЫВОД:
+   как этот опыт поможет работодателю.
+
+5. Не повторяй формулировки из вакансии дословно.
+6. Не используй клише.
+7. Не пиши воду.
+
+СТРУКТУРА ПИСЬМА:
+
+1. Приветствие (строго: "Добрый день," или "Здравствуйте,")
+2. Профессиональная идентификация (роль + опыт + специализация)
+3. 2–3 самых релевантных достижения:
+   - с цифрами
+   - с бизнес-результатом
+4. Короткий вывод о ценности для компании
+5. Завершение без просьб и заискивания
+"""
+
     if level == "junior":
-        return (
-            "Ты пишешь краткое сопроводительное письмо от лица начинающего специалиста.\n\n"
-            "Строгие правила:\n"
-            "1. Письмо ВСЕГДА начинается с 'Добрый день,' или 'Здравствуйте,'\n"
-            "2. Нельзя начинать письмо с 'Я заинтересован', 'Хочу откликнуться', "
-            "'Увидел вакансию', 'Обращаюсь по поводу вакансии'\n"
-            "3. Никаких вводных фраз перед приветствием\n\n"
-            "Стиль:\n"
-            "- естественный\n"
-            "- без пафоса\n"
-            "- без канцелярита\n"
-            "- без заискивания\n"
-            "- 4–6 коротких абзацев\n"
-            "- акцент на обучаемость, мотивацию и реальные навыки\n"
-            "- писать просто и по делу\n\n"
-            'В конце: "Подробности — в резюме."')
+        return base_rules + """
+
+Дополнительные правила для junior:
+
+- Делай акцент на конкретных задачах, которые уже выполнялись.
+- Покажи скорость обучения через факты.
+- Если нет масштабных цифр — используй реальные результаты (запущено, реализовано, автоматизировано и т.д.).
+- 4–6 коротких абзацев.
+- Тон: профессиональный, но без пафоса.
+
+В конце обязательно:
+"Подробности — в резюме."
+"""
+
     if level == "senior":
-        return (
-            "Ты пишешь краткое и уверенное сопроводительное письмо от лица опытного специалиста.\n\n"
-            "Строгие правила:\n"
-            "1. Письмо ВСЕГДА начинается с 'Добрый день,' или 'Здравствуйте,'\n"
-            "2. Нельзя использовать фразы: 'Я заинтересован', 'Увидел вакансию', "
-            "'Хочу откликнуться', 'Буду рад внести вклад'\n"
-            "3. Не писать объяснений очевидного\n"
-            "4. Никаких оправданий или просьб\n\n"
-            "Стиль:\n"
-            "- прямой\n"
-            "- уверенный\n"
-            "- без лишней вежливости\n"
-            "- 4–6 абзацев\n"
-            "- акцент на масштабе проектов, ответственности и результатах\n"
-            "- звучать как специалист, который выбирает проект\n\n"
-            "Завершение — нейтральное предложение обсудить детали.")
-    return (
-        "Ты пишешь краткое сопроводительное письмо от лица специалиста с опытом.\n\n"
-        "Строгие правила:\n"
-        "1. Письмо ВСЕГДА начинается с 'Добрый день,' или 'Здравствуйте,'\n"
-        "2. Запрещены формулировки: 'Я заинтересован', 'Увидел вакансию', "
-        "'Хочу откликнуться', 'Буду рад внести вклад'\n"
-        "3. Не повторять формулировки из вакансии\n"
-        "4. Не писать вводных фраз перед приветствием\n\n"
-        "Стиль:\n"
-        "- деловой, спокойный\n"
-        "- без канцелярита\n"
-        "- без лести\n"
-        "- 5–7 коротких абзацев\n"
-        "- конкретные достижения и цифры\n"
-        "- фокус на ценности для компании\n\n"
-        'В конце: "Подробности — в резюме."')
+        return base_rules + """
+
+Дополнительные правила для senior:
+
+- Делай акцент на масштабе, ответственности, управлении и влиянии на бизнес.
+- Покажи влияние на выручку, эффективность, рост, оптимизацию.
+- Используй язык выгод и решений.
+- 4–6 абзацев.
+- Тон: уверенный, как у специалиста, который выбирает проект.
+- Без просьб и без излишней вежливости.
+
+Завершение — нейтральное предложение обсудить задачи бизнеса.
+"""
+
+    return base_rules + """
+
+- 5–7 коротких абзацев.
+- Фокус на измеримых результатах.
+- Фокус на выгоде для компании.
+- Без канцелярита.
+
+В конце:
+"Подробности — в резюме."
+"""
 
 
 async def generate_cover_letter(update: Update,
@@ -1264,7 +1366,7 @@ async def generate_cover_letter(update: Update,
             save_users_db()
 
     await query.edit_message_text(
-        "Генерирую сопроводительное письмо (10-20 сек)...")
+        "Анализирую резюме и вакансию (15-30 сек)...")
 
     description = vacancy.get('description', '')
     from html import unescape
@@ -1277,58 +1379,36 @@ async def generate_cover_letter(update: Update,
     level = detect_level(vacancy_text)
     system_prompt = get_cover_letter_system_prompt(level)
 
-    prompt = f"""Напиши сопроводительное письмо на русском языке.
+    try:
+        resume_json, vacancy_json = await asyncio.gather(
+            call_openrouter(RESUME_STRUCTURING_PROMPT, f"Резюме:\n{resume[:2500]}", 600),
+            call_openrouter(VACANCY_ANALYSIS_PROMPT, f"Вакансия:\nНазвание: {vacancy.get('name', '')}\nОписание: {description}", 400)
+        )
 
-ВАКАНСИЯ:
-Название: {vacancy.get('name', '')}
+        prompt = f"""Напиши сопроводительное письмо на русском языке.
+
+СТРУКТУРИРОВАННОЕ РЕЗЮМЕ:
+{resume_json}
+
+АНАЛИЗ ВАКАНСИИ:
+{vacancy_json}
+
 Компания: {vacancy.get('employer', {}).get('name', '')}
-Описание: {description}
-
-РЕЗЮМЕ КАНДИДАТА:
-{resume[:2500]}
+Должность: {vacancy.get('name', '')}
 
 Напиши только текст письма, без заголовков и подписей. Длина: 120-180 слов."""
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://replit.com",
-                        "X-Title": "HH Resume Helper"
-                    },
-                    json={
-                        "model":
-                        "openai/gpt-4o",
-                        "messages": [{
-                            "role": "system",
-                            "content": system_prompt
-                        }, {
-                            "role": "user",
-                            "content": prompt
-                        }],
-                        "max_tokens":
-                        800
-                    },
-                    timeout=aiohttp.ClientTimeout(total=60)) as response:
-                result = await response.json()
+        cover_letter = await call_openrouter(system_prompt, prompt, 800)
 
-        if 'error' in result:
-            raise Exception(
-                f"API: {result['error'].get('message', result['error'])}")
-
-        if 'choices' not in result or not result['choices']:
-            logger.error(f"Unexpected API response: {result}")
-            raise Exception("Неожиданный ответ API")
-
-        cover_letter = result['choices'][0]['message']['content']
-
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=f"**Сопроводительное письмо:**\n\n{cover_letter}",
-            parse_mode='Markdown')
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"**Сопроводительное письмо:**\n\n{cover_letter}",
+                parse_mode='Markdown')
+        except Exception:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"Сопроводительное письмо:\n\n{cover_letter}")
 
         await context.bot.send_message(
             chat_id=user_id,
@@ -1354,7 +1434,7 @@ async def generate_cover_letter(update: Update,
         logger.error(f"Error generating cover letter: {e}")
         await context.bot.send_message(
             chat_id=user_id,
-            text=f"Ошибка генерации: {str(e)}",
+            text=f"Ошибка генерации: {str(e)[:200]}",
             reply_markup=get_vacancy_action_keyboard())
         return STEP_VACANCY
 
@@ -1430,40 +1510,19 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Дай 3-5 конкретных правок. Цитируй реальные фразы из резюме пользователя."""
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://replit.com",
-                        "X-Title": "HH Resume Helper"
-                    },
-                    json={
-                        "model": "openai/gpt-4o",
-                        "messages": [{
-                            "role": "user",
-                            "content": prompt
-                        }],
-                        "max_tokens": 1000
-                    },
-                    timeout=aiohttp.ClientTimeout(total=60)) as response:
-                result = await response.json()
+        recommendations = await call_openrouter(
+            "Ты эксперт по резюме. Давай только конкретные правки в формате БЫЛО/СТАЛО.",
+            prompt, 1000)
 
-        if 'error' in result:
-            raise Exception(
-                f"API: {result['error'].get('message', result['error'])}")
-
-        if 'choices' not in result or not result['choices']:
-            logger.error(f"Unexpected API response: {result}")
-            raise Exception("Неожиданный ответ API")
-
-        recommendations = result['choices'][0]['message']['content']
-
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=f"**Рекомендации по адаптации резюме:**\n\n{recommendations}",
-            parse_mode='Markdown')
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"**Рекомендации по адаптации резюме:**\n\n{recommendations}",
+                parse_mode='Markdown')
+        except Exception:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"Рекомендации по адаптации резюме:\n\n{recommendations}")
 
         await context.bot.send_message(
             chat_id=user_id,
