@@ -1217,12 +1217,14 @@ async def call_openrouter(system_prompt: str, user_prompt: str, max_tokens: int 
                     "X-Title": "HH Resume Helper"
                 },
                 json={
-                    "model": "openai/gpt-4o",
+                    "model": "openai/gpt-4.1",
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "max_tokens": max_tokens
+                    "max_tokens": max_tokens,
+                    "temperature": 0.1,
+                    "top_p": 0.8
                 },
                 timeout=aiohttp.ClientTimeout(total=60)) as response:
             result = await response.json()
