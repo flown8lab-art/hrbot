@@ -1,0 +1,184 @@
+1️⃣ main.py — УБРАТЬ ВСЕ ЛИМИТЫ И ДОБАВИТЬ ПАГИНАЦИЮ
+🔹 1.1 Полностью заменить search_trudvsem
+
+Найди функцию search_trudvsem и замени её целиком:
+
+async def search_trudvsem(query: str, prefs: dict) -> list:
+    try:
+        all_vacancies = []
+        offset = 0
+        limit = 100
+
+        async with aiohttp.ClientSession() as session:
+            while True:
+                params = {
+                    "text": query,
+                    "offset": offset,
+                    "limit": limit
+                }
+
+                async with session.get(
+                    f"{TRUDVSEM_API_URL}/vacancies",
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=20)
+                ) as response:
+
+                    if response.status != 200:
+                        break
+
+                    data = await response.json()
+
+                results = data.get("results", {}).get("vacancies", [])
+                if not results:
+                    break
+
+                for item in results:
+                    vac = item.get("vacancy", {})
+                    all_vacancies.append({
+                        "id": f"tv_{vac.get('id','')}",
+                        "name": vac.get("job-name",""),
+                        "employer": {
+                            "name": vac.get("company",{}).get("name","")
+                        },
+                        "salary": None,
+                        "alternate_url": "",
+                        "area": {"name": ""},
+                        "source": "trudvsem"
+                    })
+
+                offset += limit
+
+        return all_vacancies
+
+    except Exception as e:
+        logger.error(f"Trudvsem error: {e}")
+        return []
+🔹 1.2 Убрать return [:20]
+
+Если где-то осталось:
+
+return vacancies[:20]
+
+замени на:
+
+return vacancies
+2️⃣ Улучшаем Telegram поиск
+🔹 2.1 Полностью заменить search_telegram_vacancies
+def search_telegram_vacancies(query: str, prefs: dict) -> list:
+    try:
+        with open("bot/telegram_vacancies.json", "r", encoding="utf-8") as f:
+            all_vacancies = json.load(f)
+    except:
+        return []
+
+    query_lower = query.lower()
+    query_tokens = query_lower.split()
+
+    results = []
+
+    for vac in all_vacancies:
+        combined = (
+            vac.get("name","") + " " +
+            vac.get("full_text","")
+        ).lower()
+
+        # мягкий поиск
+        score = sum(1 for token in query_tokens if token in combined)
+
+        if score >= 1:
+            vac["score"] = score
+            results.append(vac)
+
+    # сортировка по релевантности
+    results.sort(key=lambda x: x.get("score",0), reverse=True)
+
+    return results
+3️⃣ telegram_parser.py — ослабить фильтр
+
+Найди:
+
+return keyword_count >= 2
+
+Замени на:
+
+return keyword_count >= 1
+
+Это увеличит количество вакансий в 2–3 раза.
+
+4️⃣ УБРАТЬ жёсткий expand_query
+
+В expand_query заменить:
+
+return ' OR '.join(synonyms[:5])
+
+на:
+
+return ' OR '.join(synonyms)
+
+Теперь будут использоваться все синонимы.
+
+5️⃣ Добавляем кэширование (ускорит поиск)
+
+В main.py в начало файла добавить:
+
+SEARCH_CACHE = {}
+CACHE_TTL = 300  # 5 минут
+
+Добавить функцию:
+
+import time
+
+def get_cache(key):
+    if key in SEARCH_CACHE:
+        data, ts = SEARCH_CACHE[key]
+        if time.time() - ts < CACHE_TTL:
+            return data
+    return None
+
+def set_cache(key, data):
+    SEARCH_CACHE[key] = (data, time.time())
+
+Теперь в функции, где объединяются вакансии (где hh + tv + tg), добавить:
+
+cache_key = f"{query}_{str(prefs)}"
+
+cached = get_cache(cache_key)
+if cached:
+    return cached
+
+Перед return:
+
+set_cache(cache_key, vacancies)
+6️⃣ Улучшаем ranking (важно)
+
+Добавь функцию:
+
+def rank_vacancies(vacancies: list, query: str):
+    query_tokens = query.lower().split()
+
+    for vac in vacancies:
+        combined = (
+            vac.get("name","") + " " +
+            vac.get("full_text","")
+        ).lower()
+
+        score = 0
+
+        for token in query_tokens:
+            if token in combined:
+                score += 3
+
+        if vac.get("salary"):
+            score += 1
+
+        if "remote" in combined or "удал" in combined:
+            score += 1
+
+        vac["score"] = score
+
+    vacancies.sort(key=lambda x: x.get("score",0), reverse=True)
+    return vacancies
+
+После объединения всех источников добавить:
+
+vacancies = rank_vacancies(vacancies, query)

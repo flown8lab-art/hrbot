@@ -132,7 +132,7 @@ def is_job_posting(text):
         return False
     text_lower = text.lower()
     keyword_count = sum(1 for kw in JOB_KEYWORDS if kw in text_lower)
-    return keyword_count >= 2
+    return keyword_count >= 1
 
 def is_remote(text):
     remote_keywords = ['remote', 'удалённ', 'удаленн', 'дистанц', 'из дома', 'home office']

@@ -36,6 +36,8 @@ STEP_START, STEP_RESUME, STEP_PREFERENCES, STEP_SEARCH, STEP_VACANCY = range(5)
 user_data_store = {}
 USERS_DB_FILE = 'bot/users_db.json'
 STATS_FILE = 'bot/stats.json'
+SEARCH_CACHE = {}
+CACHE_TTL = 300
 
 
 def load_users_db():
@@ -104,6 +106,35 @@ def clean_applied_history(user):
     ]
     if len(user["applied_vacancies"]) > 200:
         user["applied_vacancies"] = user["applied_vacancies"][-200:]
+
+
+def get_cache(key):
+    if key in SEARCH_CACHE:
+        data, ts = SEARCH_CACHE[key]
+        if time.time() - ts < CACHE_TTL:
+            return data
+    return None
+
+
+def set_cache(key, data):
+    SEARCH_CACHE[key] = (data, time.time())
+
+
+def rank_vacancies(vacancies: list, query: str):
+    query_tokens = query.lower().split()
+    for vac in vacancies:
+        combined = (vac.get("name", "") + " " + vac.get("full_text", "")).lower()
+        score = 0
+        for token in query_tokens:
+            if token in combined:
+                score += 3
+        if vac.get("salary"):
+            score += 1
+        if "remote" in combined or "удал" in combined:
+            score += 1
+        vac["score"] = score
+    vacancies.sort(key=lambda x: x.get("score", 0), reverse=True)
+    return vacancies
 
 
 def has_access(user_id):
@@ -542,54 +573,55 @@ def expand_query(query: str) -> str:
     query_lower = query.lower().strip()
     for key, synonyms in JOB_SYNONYMS.items():
         if key in query_lower or query_lower in key:
-            return ' OR '.join(synonyms[:5])
+            return ' OR '.join(synonyms)
     return query
 
 
 async def search_trudvsem(query: str, prefs: dict) -> list:
     try:
-        params = {'text': query, 'offset': 0, 'limit': 30}
+        all_vacancies = []
+        offset = 0
+        limit = 100
 
         async with aiohttp.ClientSession() as session:
-            async with session.get(
+            while True:
+                params = {
+                    "text": query,
+                    "offset": offset,
+                    "limit": limit
+                }
+
+                async with session.get(
                     f"{TRUDVSEM_API_URL}/vacancies",
                     params=params,
-                    timeout=aiohttp.ClientTimeout(total=10)) as response:
-                if response.status != 200:
-                    return []
-                data = await response.json()
+                    timeout=aiohttp.ClientTimeout(total=20)
+                ) as response:
+                    if response.status != 200:
+                        break
+                    data = await response.json()
 
-        vacancies = []
-        results = data.get('results', {}).get('vacancies', [])
+                results = data.get("results", {}).get("vacancies", [])
+                if not results:
+                    break
 
-        for item in results:
-            vac = item.get('vacancy', {})
-            salary_min = vac.get('salary_min')
-            salary_max = vac.get('salary_max')
+                for item in results:
+                    vac = item.get("vacancy", {})
+                    all_vacancies.append({
+                        "id": f"tv_{vac.get('id', '')}",
+                        "name": vac.get("job-name", ""),
+                        "employer": {
+                            "name": vac.get("company", {}).get("name", "")
+                        },
+                        "salary": None,
+                        "alternate_url": "",
+                        "area": {"name": ""},
+                        "source": "trudvsem"
+                    })
 
-            if prefs.get(
-                    'salary') and salary_max and salary_max < prefs['salary']:
-                continue
+                offset += limit
 
-            vacancies.append({
-                'id': f"tv_{vac.get('id', '')}",
-                'name': vac.get('job-name', ''),
-                'employer': {
-                    'name': vac.get('company', {}).get('name', '')
-                },
-                'salary': {
-                    'from': salary_min,
-                    'to': salary_max,
-                    'currency': 'RUR'
-                } if salary_min or salary_max else None,
-                'alternate_url':
-                f"https://trudvsem.ru/vacancy/card/{vac.get('company', {}).get('companycode', '')}/{vac.get('id', '')}",
-                'area': {
-                    'name': vac.get('region', {}).get('name', '')
-                },
-                'source': 'trudvsem'
-            })
-        return vacancies[:20]
+        return all_vacancies
+
     except Exception as e:
         logger.error(f"Trudvsem error: {e}")
         return []
@@ -603,21 +635,18 @@ def search_telegram_vacancies(query: str, prefs: dict) -> list:
         return []
 
     query_lower = query.lower()
-    query_words = query_lower.split()
+    query_tokens = query_lower.split()
 
     results = []
     for vac in all_vacancies:
-        text = (vac.get('name', '') + ' ' + vac.get('full_text', '')).lower()
-
-        if any(word in text for word in query_words):
-            if prefs.get('salary'):
-                sal = vac.get('salary')
-                if sal and sal.get('to') and sal['to'] < prefs['salary']:
-                    continue
-
+        combined = (vac.get('name', '') + ' ' + vac.get('full_text', '')).lower()
+        score = sum(1 for token in query_tokens if token in combined)
+        if score >= 1:
+            vac['score'] = score
             results.append(vac)
 
-    return results[:20]
+    results.sort(key=lambda x: x.get('score', 0), reverse=True)
+    return results
 
 
 def _score_label(score: int) -> str:
@@ -728,42 +757,53 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Ищу вакансии: {query}...")
 
     try:
-        params = {
-            'text': expanded_query,
-            'search_field': 'name',
-            'per_page': 20,
-            'page': 0,
-            'area': prefs.get('area', 113),
-            'period': 14
-        }
+        cache_key = f"{query}_{str(prefs)}"
+        cached = get_cache(cache_key)
 
-        if prefs.get('schedule'):
-            params['schedule'] = prefs['schedule']
-        if prefs.get('salary'):
-            params['salary'] = prefs['salary']
-        if prefs.get('experience'):
-            params['experience'] = prefs['experience']
+        if cached:
+            vacancies = cached
+            hh_vacancies = [v for v in vacancies if v.get('source') == 'hh']
+            tv_vacancies = [v for v in vacancies if v.get('source') == 'trudvsem']
+            tg_vacancies = [v for v in vacancies if v.get('source') == 'telegram']
+        else:
+            params = {
+                'text': expanded_query,
+                'search_field': 'name',
+                'per_page': 20,
+                'page': 0,
+                'area': prefs.get('area', 113),
+                'period': 14
+            }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                    f"{HH_API_URL}/vacancies",
-                    params=params,
-                    headers=HEADERS,
-                    timeout=aiohttp.ClientTimeout(total=15)) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise Exception(
-                        f"HTTP {response.status}: {error_text[:200]}")
-                data = await response.json()
+            if prefs.get('schedule'):
+                params['schedule'] = prefs['schedule']
+            if prefs.get('salary'):
+                params['salary'] = prefs['salary']
+            if prefs.get('experience'):
+                params['experience'] = prefs['experience']
 
-        hh_vacancies = data.get('items', [])
-        for vac in hh_vacancies:
-            vac['source'] = 'hh'
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                        f"{HH_API_URL}/vacancies",
+                        params=params,
+                        headers=HEADERS,
+                        timeout=aiohttp.ClientTimeout(total=15)) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise Exception(
+                            f"HTTP {response.status}: {error_text[:200]}")
+                    data = await response.json()
 
-        tv_vacancies = await search_trudvsem(query, prefs)
-        tg_vacancies = search_telegram_vacancies(query, prefs)
+            hh_vacancies = data.get('items', [])
+            for vac in hh_vacancies:
+                vac['source'] = 'hh'
 
-        vacancies = hh_vacancies + tv_vacancies + tg_vacancies
+            tv_vacancies = await search_trudvsem(query, prefs)
+            tg_vacancies = search_telegram_vacancies(query, prefs)
+
+            vacancies = hh_vacancies + tv_vacancies + tg_vacancies
+            vacancies = rank_vacancies(vacancies, query)
+            set_cache(cache_key, vacancies)
 
         user = get_user(user_id)
         clean_applied_history(user)
