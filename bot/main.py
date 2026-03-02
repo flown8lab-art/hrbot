@@ -704,15 +704,24 @@ async def search_trudvsem(query: str, prefs: dict) -> list:
 
                 for item in results:
                     vac = item.get("vacancy", {})
+                    company = vac.get("company", {})
+                    companycode = company.get("companycode", "")
+                    vac_id = vac.get("id", "")
+                    salary_min = vac.get("salary_min")
+                    salary_max = vac.get("salary_max")
                     all_vacancies.append({
-                        "id": f"tv_{vac.get('id', '')}",
+                        "id": f"tv_{vac_id}",
                         "name": vac.get("job-name", ""),
                         "employer": {
-                            "name": vac.get("company", {}).get("name", "")
+                            "name": company.get("name", "")
                         },
-                        "salary": None,
-                        "alternate_url": "",
-                        "area": {"name": ""},
+                        "salary": {
+                            "from": salary_min,
+                            "to": salary_max,
+                            "currency": "RUR"
+                        } if salary_min or salary_max else None,
+                        "alternate_url": f"https://trudvsem.ru/vacancy/card/{companycode}/{vac_id}" if companycode and vac_id else "",
+                        "area": {"name": vac.get("region", {}).get("name", "")},
                         "source": "trudvsem"
                     })
 
