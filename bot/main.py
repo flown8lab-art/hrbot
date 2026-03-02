@@ -4,6 +4,7 @@ import json
 import logging
 import asyncio
 import time
+import sqlite3
 import aiohttp
 import requests
 from datetime import datetime, timedelta
@@ -38,6 +39,22 @@ USERS_DB_FILE = 'bot/users_db.json'
 STATS_FILE = 'bot/stats.json'
 SEARCH_CACHE = {}
 CACHE_TTL = 300
+
+conn = sqlite3.connect("bot/vacancies.db", check_same_thread=False)
+db_cursor = conn.cursor()
+db_cursor.execute("""
+CREATE TABLE IF NOT EXISTS telegram_vacancies (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    employer TEXT,
+    salary TEXT,
+    url TEXT,
+    area TEXT,
+    full_text TEXT,
+    parsed_at TEXT
+)
+""")
+conn.commit()
 
 
 def load_users_db():
@@ -123,18 +140,99 @@ def set_cache(key, data):
 def rank_vacancies(vacancies: list, query: str):
     query_tokens = query.lower().split()
     for vac in vacancies:
-        combined = (vac.get("name", "") + " " + vac.get("full_text", "")).lower()
+        combined = (
+            vac.get("name", "") + " " +
+            vac.get("full_text", "") + " " +
+            str(vac.get("area", {}).get("name", ""))
+        ).lower()
         score = 0
         for token in query_tokens:
             if token in combined:
-                score += 3
+                score += 5
         if vac.get("salary"):
-            score += 1
+            score += 2
         if "remote" in combined or "удал" in combined:
+            score += 2
+        if vac.get("source") == "hh":
             score += 1
         vac["score"] = score
     vacancies.sort(key=lambda x: x.get("score", 0), reverse=True)
     return vacancies
+
+
+def deduplicate_vacancies(vacancies: list) -> list:
+    seen = set()
+    unique = []
+    for vac in vacancies:
+        key = (
+            vac.get("name", "").lower().strip(),
+            vac.get("employer", {}).get("name", "").lower().strip()
+        )
+        if key not in seen:
+            seen.add(key)
+            unique.append(vac)
+    return unique
+
+
+async def search_hh(query: str, prefs: dict) -> list:
+    try:
+        all_vacancies = []
+        page = 0
+        per_page = 100
+
+        async with aiohttp.ClientSession() as session:
+            while True:
+                params = {
+                    "text": query,
+                    "page": page,
+                    "per_page": per_page,
+                    "area": prefs.get("area", 113),
+                    "period": 14
+                }
+                if prefs.get("schedule"):
+                    params["schedule"] = prefs["schedule"]
+                if prefs.get("salary"):
+                    params["salary"] = prefs["salary"]
+                if prefs.get("experience"):
+                    params["experience"] = prefs["experience"]
+
+                async with session.get(
+                    f"{HH_API_URL}/vacancies",
+                    params=params,
+                    headers=HEADERS,
+                    timeout=aiohttp.ClientTimeout(total=20)
+                ) as response:
+                    if response.status != 200:
+                        break
+                    data = await response.json()
+
+                items = data.get("items", [])
+                if not items:
+                    break
+
+                for item in items:
+                    all_vacancies.append({
+                        "id": f"hh_{item.get('id')}",
+                        "name": item.get("name"),
+                        "employer": {
+                            "name": item.get("employer", {}).get("name")
+                        },
+                        "salary": item.get("salary"),
+                        "alternate_url": item.get("alternate_url"),
+                        "area": {
+                            "name": item.get("area", {}).get("name")
+                        },
+                        "source": "hh"
+                    })
+
+                if page >= data.get("pages", 0) - 1:
+                    break
+                page += 1
+
+        return all_vacancies
+    except Exception as e:
+        logger.error(f"HH error: {e}")
+        return []
 
 
 def has_access(user_id):
@@ -628,24 +726,30 @@ async def search_trudvsem(query: str, prefs: dict) -> list:
 
 
 def search_telegram_vacancies(query: str, prefs: dict) -> list:
+    query_lower = query.lower()
     try:
-        with open('bot/telegram_vacancies.json', 'r', encoding='utf-8') as f:
-            all_vacancies = json.load(f)
-    except:
+        db_cursor.execute("""
+        SELECT id, name, employer, salary, url, area, full_text
+        FROM telegram_vacancies
+        WHERE lower(name) LIKE ? OR lower(full_text) LIKE ?
+        """, (f"%{query_lower}%", f"%{query_lower}%"))
+        rows = db_cursor.fetchall()
+    except Exception as e:
+        logger.error(f"SQLite search error: {e}")
         return []
 
-    query_lower = query.lower()
-    query_tokens = query_lower.split()
-
     results = []
-    for vac in all_vacancies:
-        combined = (vac.get('name', '') + ' ' + vac.get('full_text', '')).lower()
-        score = sum(1 for token in query_tokens if token in combined)
-        if score >= 1:
-            vac['score'] = score
-            results.append(vac)
-
-    results.sort(key=lambda x: x.get('score', 0), reverse=True)
+    for row in rows:
+        results.append({
+            "id": row[0],
+            "name": row[1],
+            "employer": {"name": row[2]},
+            "salary": row[3],
+            "alternate_url": row[4],
+            "area": {"name": row[5]},
+            "full_text": row[6],
+            "source": "telegram"
+        })
     return results
 
 
@@ -766,42 +870,12 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tv_vacancies = [v for v in vacancies if v.get('source') == 'trudvsem']
             tg_vacancies = [v for v in vacancies if v.get('source') == 'telegram']
         else:
-            params = {
-                'text': expanded_query,
-                'search_field': 'name',
-                'per_page': 20,
-                'page': 0,
-                'area': prefs.get('area', 113),
-                'period': 14
-            }
-
-            if prefs.get('schedule'):
-                params['schedule'] = prefs['schedule']
-            if prefs.get('salary'):
-                params['salary'] = prefs['salary']
-            if prefs.get('experience'):
-                params['experience'] = prefs['experience']
-
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                        f"{HH_API_URL}/vacancies",
-                        params=params,
-                        headers=HEADERS,
-                        timeout=aiohttp.ClientTimeout(total=15)) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        raise Exception(
-                            f"HTTP {response.status}: {error_text[:200]}")
-                    data = await response.json()
-
-            hh_vacancies = data.get('items', [])
-            for vac in hh_vacancies:
-                vac['source'] = 'hh'
-
+            hh_vacancies = await search_hh(expanded_query, prefs)
             tv_vacancies = await search_trudvsem(query, prefs)
             tg_vacancies = search_telegram_vacancies(query, prefs)
 
             vacancies = hh_vacancies + tv_vacancies + tg_vacancies
+            vacancies = deduplicate_vacancies(vacancies)
             vacancies = rank_vacancies(vacancies, query)
             set_cache(cache_key, vacancies)
 
@@ -819,21 +893,14 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Попробуй изменить запрос или напиши новую должность:")
             return STEP_SEARCH
 
-        seen = set()
-        unique_vacancies = []
         exclude_keywords = [
             'менеджер по продажам', 'sales manager', 'менеджер продаж',
             'торговый представитель', 'продавец-консультант', 'продавец'
         ]
-        for vac in vacancies:
-            name_lower = vac.get('name', '').lower()
-            if any(excl in name_lower for excl in exclude_keywords):
-                continue
-            key = (name_lower, vac.get('employer', {}).get('name', '').lower())
-            if key not in seen:
-                seen.add(key)
-                unique_vacancies.append(vac)
-        vacancies = unique_vacancies
+        vacancies = [
+            vac for vac in vacancies
+            if not any(excl in vac.get('name', '').lower() for excl in exclude_keywords)
+        ]
 
         query_tokens = normalize_query(query)
 
@@ -1022,7 +1089,7 @@ async def vacancy_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                        f"{HH_API_URL}/vacancies/{vacancy['id']}",
+                        f"{HH_API_URL}/vacancies/{str(vacancy['id']).replace('hh_', '')}",
                         headers=HEADERS,
                         timeout=aiohttp.ClientTimeout(total=15)) as response:
                     if response.status != 200:
@@ -1709,7 +1776,7 @@ def main():
                     logger.error("Parser timed out after 300s")
             except Exception as e:
                 logger.error(f"Parser exception: {e}")
-            await asyncio.sleep(12 * 60 * 60)
+            await asyncio.sleep(30 * 60)
 
     async def run_bot():
         async with application:

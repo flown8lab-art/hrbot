@@ -3,6 +3,7 @@ import json
 import asyncio
 import logging
 import re
+import sqlite3
 import aiohttp
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
@@ -93,6 +94,41 @@ def load_vacancies():
 def save_vacancies(vacancies):
     with open(VACANCIES_FILE, 'w', encoding='utf-8') as f:
         json.dump(vacancies, f, ensure_ascii=False, indent=2)
+
+
+def save_to_sqlite(vacancies):
+    db_conn = sqlite3.connect("bot/vacancies.db")
+    cur = db_conn.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS telegram_vacancies (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        employer TEXT,
+        salary TEXT,
+        url TEXT,
+        area TEXT,
+        full_text TEXT,
+        parsed_at TEXT
+    )
+    """)
+    for vac in vacancies:
+        cur.execute("""
+        INSERT OR IGNORE INTO telegram_vacancies
+        (id, name, employer, salary, url, area, full_text, parsed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            vac.get("id", ""),
+            vac.get("name", ""),
+            vac.get("employer", {}).get("name", "") if isinstance(vac.get("employer"), dict) else str(vac.get("employer", "")),
+            json.dumps(vac.get("salary")) if vac.get("salary") else "",
+            vac.get("alternate_url", ""),
+            vac.get("area", {}).get("name", "") if isinstance(vac.get("area"), dict) else str(vac.get("area", "")),
+            vac.get("full_text", ""),
+            vac.get("parsed_at", "")
+        ))
+    db_conn.commit()
+    db_conn.close()
+    logger.info(f"Saved {len(vacancies)} vacancies to SQLite")
 
 def extract_salary(text):
     match = SALARY_PATTERN.search(text)
@@ -214,6 +250,7 @@ async def parse_all_channels():
     combined = all_new_vacancies + existing
     combined = combined[:500]
     save_vacancies(combined)
+    save_to_sqlite(combined)
     logger.info(f"Total: {len(all_new_vacancies)} new, {len(combined)} stored")
 
 async def main():
