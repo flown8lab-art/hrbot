@@ -67,7 +67,8 @@ CHANNELS = [
     'sgparttimers', 'snapjobssg', 'jobprop', 'jobhitchpt', 'searchforjob',
 ]
 
-VACANCIES_FILE = 'bot/telegram_vacancies.json'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VACANCIES_FILE = os.path.join(BASE_DIR, 'telegram_vacancies.json')
 
 JOB_KEYWORDS = [
     'вакансия', 'ищем', 'hiring', 'требуется', 'нужен', 'открыта позиция',
@@ -97,7 +98,7 @@ def save_vacancies(vacancies):
 
 
 def save_to_sqlite(vacancies):
-    db_conn = sqlite3.connect("bot/vacancies.db")
+    db_conn = sqlite3.connect(os.path.join(BASE_DIR, "vacancies.db"))
     cur = db_conn.cursor()
     cur.execute("""
     CREATE TABLE IF NOT EXISTS telegram_vacancies (
