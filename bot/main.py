@@ -140,11 +140,8 @@ def set_cache(key, data):
 def rank_vacancies(vacancies: list, query: str):
     query_tokens = query.lower().split()
     for vac in vacancies:
-        combined = (
-            vac.get("name", "") + " " +
-            vac.get("full_text", "") + " " +
-            str(vac.get("area", {}).get("name", ""))
-        ).lower()
+        combined = (vac.get("name", "") + " " + vac.get("full_text", "") +
+                    " " + str(vac.get("area", {}).get("name", ""))).lower()
         score = 0
         for token in query_tokens:
             if token in combined:
@@ -164,10 +161,8 @@ def deduplicate_vacancies(vacancies: list) -> list:
     seen = set()
     unique = []
     for vac in vacancies:
-        key = (
-            vac.get("name", "").lower().strip(),
-            vac.get("employer", {}).get("name", "").lower().strip()
-        )
+        key = (vac.get("name", "").lower().strip(),
+               vac.get("employer", {}).get("name", "").lower().strip())
         if key not in seen:
             seen.add(key)
             unique.append(vac)
@@ -197,11 +192,10 @@ async def search_hh(query: str, prefs: dict) -> list:
                     params["experience"] = prefs["experience"]
 
                 async with session.get(
-                    f"{HH_API_URL}/vacancies",
-                    params=params,
-                    headers=HEADERS,
-                    timeout=aiohttp.ClientTimeout(total=20)
-                ) as response:
+                        f"{HH_API_URL}/vacancies",
+                        params=params,
+                        headers=HEADERS,
+                        timeout=aiohttp.ClientTimeout(total=20)) as response:
                     if response.status != 200:
                         break
                     data = await response.json()
@@ -212,17 +206,22 @@ async def search_hh(query: str, prefs: dict) -> list:
 
                 for item in items:
                     all_vacancies.append({
-                        "id": f"hh_{item.get('id')}",
-                        "name": item.get("name"),
+                        "id":
+                        f"hh_{item.get('id')}",
+                        "name":
+                        item.get("name"),
                         "employer": {
                             "name": item.get("employer", {}).get("name")
                         },
-                        "salary": item.get("salary"),
-                        "alternate_url": item.get("alternate_url"),
+                        "salary":
+                        item.get("salary"),
+                        "alternate_url":
+                        item.get("alternate_url"),
                         "area": {
                             "name": item.get("area", {}).get("name")
                         },
-                        "source": "hh"
+                        "source":
+                        "hh"
                     })
 
                 if page >= data.get("pages", 0) - 1:
@@ -683,17 +682,12 @@ async def search_trudvsem(query: str, prefs: dict) -> list:
 
         async with aiohttp.ClientSession() as session:
             while True:
-                params = {
-                    "text": query,
-                    "offset": offset,
-                    "limit": limit
-                }
+                params = {"text": query, "offset": offset, "limit": limit}
 
                 async with session.get(
-                    f"{TRUDVSEM_API_URL}/vacancies",
-                    params=params,
-                    timeout=aiohttp.ClientTimeout(total=20)
-                ) as response:
+                        f"{TRUDVSEM_API_URL}/vacancies",
+                        params=params,
+                        timeout=aiohttp.ClientTimeout(total=20)) as response:
                     if response.status != 200:
                         break
                     data = await response.json()
@@ -710,8 +704,10 @@ async def search_trudvsem(query: str, prefs: dict) -> list:
                     salary_min = vac.get("salary_min")
                     salary_max = vac.get("salary_max")
                     all_vacancies.append({
-                        "id": f"tv_{vac_id}",
-                        "name": vac.get("job-name", ""),
+                        "id":
+                        f"tv_{vac_id}",
+                        "name":
+                        vac.get("job-name", ""),
                         "employer": {
                             "name": company.get("name", "")
                         },
@@ -720,9 +716,14 @@ async def search_trudvsem(query: str, prefs: dict) -> list:
                             "to": salary_max,
                             "currency": "RUR"
                         } if salary_min or salary_max else None,
-                        "alternate_url": f"https://trudvsem.ru/vacancy/card/{companycode}/{vac_id}" if companycode and vac_id else "",
-                        "area": {"name": vac.get("region", {}).get("name", "")},
-                        "source": "trudvsem"
+                        "alternate_url":
+                        f"https://trudvsem.ru/vacancy/card/{companycode}/{vac_id}"
+                        if companycode and vac_id else "",
+                        "area": {
+                            "name": vac.get("region", {}).get("name", "")
+                        },
+                        "source":
+                        "trudvsem"
                     })
 
                 offset += limit
@@ -737,7 +738,8 @@ async def search_trudvsem(query: str, prefs: dict) -> list:
 def search_telegram_vacancies(query: str, prefs: dict) -> list:
     query_lower = query.lower()
     try:
-        db_cursor.execute("""
+        db_cursor.execute(
+            """
         SELECT id, name, employer, salary, url, area, full_text
         FROM telegram_vacancies
         WHERE lower(name) LIKE ? OR lower(full_text) LIKE ?
@@ -752,10 +754,14 @@ def search_telegram_vacancies(query: str, prefs: dict) -> list:
         results.append({
             "id": row[0],
             "name": row[1],
-            "employer": {"name": row[2]},
+            "employer": {
+                "name": row[2]
+            },
             "salary": row[3],
             "alternate_url": row[4],
-            "area": {"name": row[5]},
+            "area": {
+                "name": row[5]
+            },
             "full_text": row[6],
             "source": "telegram"
         })
@@ -876,8 +882,12 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if cached:
             vacancies = cached
             hh_vacancies = [v for v in vacancies if v.get('source') == 'hh']
-            tv_vacancies = [v for v in vacancies if v.get('source') == 'trudvsem']
-            tg_vacancies = [v for v in vacancies if v.get('source') == 'telegram']
+            tv_vacancies = [
+                v for v in vacancies if v.get('source') == 'trudvsem'
+            ]
+            tg_vacancies = [
+                v for v in vacancies if v.get('source') == 'telegram'
+            ]
         else:
             hh_vacancies = await search_hh(expanded_query, prefs)
             tv_vacancies = await search_trudvsem(query, prefs)
@@ -908,7 +918,8 @@ async def search_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         vacancies = [
             vac for vac in vacancies
-            if not any(excl in vac.get('name', '').lower() for excl in exclude_keywords)
+            if not any(excl in vac.get('name', '').lower()
+                       for excl in exclude_keywords)
         ]
 
         query_tokens = normalize_query(query)
@@ -1215,7 +1226,9 @@ VACANCY_ANALYSIS_PROMPT = """
 """
 
 
-async def call_openrouter(system_prompt: str, user_prompt: str, max_tokens: int = 800) -> str:
+async def call_openrouter(system_prompt: str,
+                          user_prompt: str,
+                          max_tokens: int = 800) -> str:
     async with aiohttp.ClientSession() as session:
         async with session.post(
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -1226,102 +1239,84 @@ async def call_openrouter(system_prompt: str, user_prompt: str, max_tokens: int 
                     "X-Title": "HH Resume Helper"
                 },
                 json={
-                    "model": "openai/gpt-4.1",
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "max_tokens": max_tokens,
-                    "temperature": 0.1,
-                    "top_p": 0.8
+                    "model":
+                    "openai/gpt-4.1",
+                    "messages": [{
+                        "role": "system",
+                        "content": system_prompt
+                    }, {
+                        "role": "user",
+                        "content": user_prompt
+                    }],
+                    "max_tokens":
+                    max_tokens,
+                    "temperature":
+                    0.1,
+                    "top_p":
+                    0.8
                 },
                 timeout=aiohttp.ClientTimeout(total=60)) as response:
             result = await response.json()
 
     if 'error' in result:
-        raise Exception(f"API: {result['error'].get('message', result['error'])}")
+        raise Exception(
+            f"API: {result['error'].get('message', result['error'])}")
     if 'choices' not in result or not result['choices']:
         raise Exception("Неожиданный ответ API")
     return result['choices'][0]['message']['content']
 
 
 def get_cover_letter_system_prompt(level: str) -> str:
-    base_rules = """
-Ты карьерный стратег и executive copywriter.
-Ты пишешь сопроводительное письмо ТОЛЬКО на основе фактов из резюме.
-
-КРИТИЧЕСКИЕ ПРАВИЛА:
-
-1. Запрещено:
-- придумывать цифры
-- добавлять навыки, которых нет в резюме
-- додумывать результаты
-- писать общие фразы без фактов
-
-2. Если в резюме нет цифр — не выдумывай их.
-3. Каждое достижение должно содержать:
-   → действие
-   → измеримый результат (если есть)
-   → бизнес-эффект
-
-4. После каждого достижения делай ВЫВОД:
-   как этот опыт поможет работодателю.
-
-5. Не повторяй формулировки из вакансии дословно.
-6. Не используй клише.
-7. Не пиши воду.
-
-СТРУКТУРА ПИСЬМА:
-
-1. Приветствие (строго: "Добрый день," или "Здравствуйте,")
-2. Профессиональная идентификация (роль + опыт + специализация)
-3. 2–3 самых релевантных достижения:
-   - с цифрами
-   - с бизнес-результатом
-4. Короткий вывод о ценности для компании
-5. Завершение без просьб и заискивания
-"""
+    base_rules = (
+        "Ты пишешь сопроводительное письмо как практик, а не как HR-копирайтер.\n\n"
+        "КРИТИЧЕСКИЕ ПРАВИЛА:\n"
+        "1. Письмо ВСЕГДА начинается с 'Добрый день,' или 'Здравствуйте,'\n"
+        "2. Запрещены фразы:\n"
+        "- 'что позволило'\n"
+        "- 'что обеспечило'\n"
+        "- 'что привело к'\n"
+        "- 'что расширило'\n"
+        "- 'такой опыт поможет'\n"
+        "- 'этот навык будет полезен'\n"
+        "- любые прогнозы о будущем\n"
+        "3. Нельзя объяснять очевидное и интерпретировать результаты.\n"
+        "4. Не повторять формулировки из вакансии дословно.\n"
+        "5. Не писать воду и абстрактные формулировки.\n\n"
+        "ФОРМУЛА КАЖДОГО ДОСТИЖЕНИЯ:\n"
+        "Я сделал X.\n"
+        "Получили Y.\n"
+        "Цифры Z.\n\n"
+        "Если нет точных цифр — не придумывать.\n"
+        "Короткие предложения.\n"
+        "Простой деловой язык.\n\n"
+        "СТРУКТУРА:\n"
+        "1. Приветствие\n"
+        "2. Краткая профессиональная идентификация\n"
+        "3. 2–3 достижения по формуле выше\n"
+        "4. Короткое завершение без просьб\n\n"
+        "Перед завершением проверь: нет ли запрещённых связок. Если есть — перепиши.\n"
+    )
 
     if level == "junior":
-        return base_rules + """
-
-Дополнительные правила для junior:
-
-- Делай акцент на конкретных задачах, которые уже выполнялись.
-- Покажи скорость обучения через факты.
-- Если нет масштабных цифр — используй реальные результаты (запущено, реализовано, автоматизировано и т.д.).
-- 4–6 коротких абзацев.
-- Тон: профессиональный, но без пафоса.
-
-В конце обязательно:
-"Подробности — в резюме."
-"""
+        return base_rules + (
+            "\nДополнительно для junior:\n"
+            "- Делай акцент на выполненных задачах.\n"
+            "- Покажи конкретные результаты, даже если они небольшие.\n"
+            "- 4–6 коротких абзацев.\n\n"
+            'В конце: "Подробности — в резюме."')
 
     if level == "senior":
-        return base_rules + """
+        return base_rules + (
+            "\nДополнительно для senior:\n"
+            "- Делай акцент на масштабе проектов и ответственности.\n"
+            "- Указывай влияние на показатели: выручка, сроки, издержки, процессы.\n"
+            "- Тон уверенный, без излишней вежливости.\n"
+            "- 4–6 абзацев.\n\n"
+            "Завершение — нейтральное предложение обсудить задачи.")
 
-Дополнительные правила для senior:
-
-- Делай акцент на масштабе, ответственности, управлении и влиянии на бизнес.
-- Покажи влияние на выручку, эффективность, рост, оптимизацию.
-- Используй язык выгод и решений.
-- 4–6 абзацев.
-- Тон: уверенный, как у специалиста, который выбирает проект.
-- Без просьб и без излишней вежливости.
-
-Завершение — нейтральное предложение обсудить задачи бизнеса.
-"""
-
-    return base_rules + """
-
-- 5–7 коротких абзацев.
-- Фокус на измеримых результатах.
-- Фокус на выгоде для компании.
-- Без канцелярита.
-
-В конце:
-"Подробности — в резюме."
-"""
+    return base_rules + ("\n- 5–7 коротких абзацев.\n"
+                         "- Фокус на измеримых результатах.\n\n"
+                         'В конце: "Подробности — в резюме."')
 
 
 async def generate_cover_letter(update: Update,
@@ -1376,8 +1371,8 @@ async def generate_cover_letter(update: Update,
             user["stats"]["total_applies"] += 1
             save_users_db()
 
-    await query.edit_message_text(
-        "Анализирую резюме и вакансию (15-30 сек)...")
+    await query.edit_message_text("Анализирую резюме и вакансию (15-30 сек)..."
+                                  )
 
     description = vacancy.get('description', '')
     from html import unescape
@@ -1392,9 +1387,12 @@ async def generate_cover_letter(update: Update,
 
     try:
         resume_json, vacancy_json = await asyncio.gather(
-            call_openrouter(RESUME_STRUCTURING_PROMPT, f"Резюме:\n{resume[:2500]}", 600),
-            call_openrouter(VACANCY_ANALYSIS_PROMPT, f"Вакансия:\nНазвание: {vacancy.get('name', '')}\nОписание: {description}", 400)
-        )
+            call_openrouter(RESUME_STRUCTURING_PROMPT,
+                            f"Резюме:\n{resume[:2500]}", 600),
+            call_openrouter(
+                VACANCY_ANALYSIS_PROMPT,
+                f"Вакансия:\nНазвание: {vacancy.get('name', '')}\nОписание: {description}",
+                400))
 
         prompt = f"""Напиши сопроводительное письмо на русском языке.
 
@@ -1488,37 +1486,91 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     description = unescape(description)
     description = ' '.join(description.split())[:2000]
 
-    prompt = f"""Ты редактор резюме. Дай КОНКРЕТНЫЕ правки для адаптации этого резюме под вакансию.
+    prompt = f"""
+    Ты карьерный стратег и эксперт по ATS-оптимизации.
 
-ВАКАНСИЯ:
-{vacancy.get('name', '')} в {vacancy.get('employer', {}).get('name', '')}
-{description}
+    Твоя задача — провести глубокий аудит резюме под конкретную вакансию.
 
-РЕЗЮМЕ КАНДИДАТА:
-{resume[:3000]}
+    Никаких общих советов.
+    Только точечные правки с объяснением проблемы.
 
-ВАЖНО: Не пиши общие советы! Давай ТОЧНЫЕ правки к КОНКРЕТНЫМ местам резюме.
+    --------------------------------------------------
+    ШАГ 1. Проанализируй вакансию и выдели:
 
-Формат ответа:
+    - 5–10 ключевых hard skills
+    - 3–5 обязательных требований
+    - Основные задачи роли
+    - Ключевые слова для ATS
 
-📝 ПРАВКИ В РЕЗЮМЕ:
+    --------------------------------------------------
+    ШАГ 2. Проанализируй резюме:
 
-1. В разделе "Опыт работы" → [название компании/должности из резюме]:
-   БЫЛО: "[точная цитата из резюме]"
-   СТАЛО: "[переписанная версия]"
+    - Где требования уже отражены
+    - Где они отражены слабо
+    - Где отсутствуют
+    - Где формулировки слишком общие
+    - Где нет цифр, но можно усилить конкретикой (без фантазий)
 
-2. В разделе "Навыки":
-   ДОБАВИТЬ: [конкретный навык из требований вакансии]
-   
-3. В разделе "О себе" / "Цель":
-   БЫЛО: "[цитата]"
-   СТАЛО: "[новая версия]"
+    --------------------------------------------------
+    ШАГ 3. Дай конкретные правки.
 
-🎯 КЛЮЧЕВЫЕ СЛОВА ИЗ ВАКАНСИИ (добавь в резюме):
-- [слово 1] — вставить в [конкретный раздел]
-- [слово 2] — вставить в [конкретный раздел]
+    ФОРМАТ:
 
-Дай 3-5 конкретных правок. Цитируй реальные фразы из резюме пользователя."""
+    📝 ПРАВКИ В РЕЗЮМЕ:
+
+    1. Раздел "Опыт работы" → [компания / должность]
+
+    БЫЛО:
+    "[точная цитата]"
+
+    ПРОБЛЕМА:
+    [нет результата / нет цифр / не отражает требование вакансии / слишком общее]
+
+    СТАЛО:
+    "[переписанная версия с конкретным результатом]"
+
+    --------------------------------------------------
+
+    2. Раздел "Навыки"
+
+    ДОБАВИТЬ:
+    - [навык из вакансии, если он уже подтверждён опытом]
+
+    ПЕРЕФОРМУЛИРОВАТЬ:
+    - [конкретный навык → более точная формулировка]
+
+    --------------------------------------------------
+
+    3. Раздел "О себе" / "Профиль"
+
+    БЫЛО:
+    "[цитата]"
+
+    ПРОБЛЕМА:
+    [слишком общее / нет специализации / нет фокуса]
+
+    СТАЛО:
+    "[версия под конкретную вакансию]"
+
+    --------------------------------------------------
+
+    🎯 КЛЮЧЕВЫЕ СЛОВА ДЛЯ ATS:
+
+    - [слово] → вставить в [конкретный раздел]
+    - [слово] → вставить в [конкретный раздел]
+
+    --------------------------------------------------
+
+    📊 ГЛАВНЫЕ РАЗРЫВЫ МЕЖДУ РЕЗЮМЕ И ВАКАНСИЕЙ:
+
+    1.
+    2.
+    3.
+
+    Дай 5–8 конкретных правок.
+    Не придумывай новый опыт.
+    Работай как редактор executive-уровня.
+    """
 
     try:
         recommendations = await call_openrouter(
@@ -1528,7 +1580,8 @@ async def adapt_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(
                 chat_id=user_id,
-                text=f"**Рекомендации по адаптации резюме:**\n\n{recommendations}",
+                text=
+                f"**Рекомендации по адаптации резюме:**\n\n{recommendations}",
                 parse_mode='Markdown')
         except Exception:
             await context.bot.send_message(
@@ -1853,8 +1906,8 @@ def main():
             await application.initialize()
             await application.start()
             await application.bot.set_my_commands([
-                ("start", "Начать поиск работы"),
-                ("mystats", "Моя статистика"),
+                ("start", "Начать поиск работы"), ("mystats",
+                                                   "Моя статистика"),
                 ("buy", "Купить пакет откликов"),
                 ("help", "Справка и возможности"),
                 ("cancel", "Отменить текущий поиск")
