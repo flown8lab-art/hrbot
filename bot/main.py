@@ -1923,4 +1923,6 @@ def main():
 
 
 if __name__ == '__main__':
+    print("Bot starting...")
+    application.run_polling()
     main()
