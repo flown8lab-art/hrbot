@@ -1,7 +1,9 @@
-node_modules
-dist
-.DS_Store
-*.local
+venv/
+__pycache__/
+*.pyc
+*.session
+vacancies.db
+users_db.json
+stats.json
+hrbot_data/
 .env
-.env.local
-.env.*.local
