@@ -1813,6 +1813,41 @@ def main():
         logger.error("OPENROUTER_API_KEY not set!")
         return
 
+    async def run_parser_periodically():
+        await asyncio.sleep(300)
+        while True:
+            try:
+                logger.info("Starting scheduled parser run...")
+                proc = await asyncio.create_subprocess_exec(
+                    'python',
+                    os.path.join(BASE_DATA_PATH, 'telegram_parser.py'),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE)
+                try:
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(),
+                                                            timeout=300)
+                    if proc.returncode == 0:
+                        logger.info("Parser completed successfully")
+                    else:
+                        logger.error(f"Parser error: {stderr.decode()[:500]}")
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    logger.error("Parser timed out after 300s")
+            except Exception as e:
+                logger.error(f"Parser exception: {e}")
+            await asyncio.sleep(30 * 60)
+
+    async def post_init(app):
+        await app.bot.set_my_commands([
+            ("start", "Начать поиск работы"),
+            ("mystats", "Моя статистика"),
+            ("buy", "Купить пакет откликов"),
+            ("help", "Справка и возможности"),
+            ("cancel", "Отменить текущий поиск")
+        ])
+        logger.info("Bot commands menu updated")
+        asyncio.create_task(run_parser_periodically())
+
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(
         post_init).build()
 
@@ -1884,50 +1919,7 @@ def main():
         MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
 
     logger.info("Bot starting...")
-
-    async def run_parser_periodically():
-        """Run telegram parser every 12 hours"""
-        await asyncio.sleep(300)
-        while True:
-            try:
-                logger.info("Starting scheduled parser run...")
-                proc = await asyncio.create_subprocess_exec(
-                    'python',
-                    os.path.join(BASE_DATA_PATH, 'telegram_parser.py'),
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE)
-                try:
-                    stdout, stderr = await asyncio.wait_for(proc.communicate(),
-                                                            timeout=300)
-                    if proc.returncode == 0:
-                        logger.info("Parser completed successfully")
-                    else:
-                        logger.error(f"Parser error: {stderr.decode()[:500]}")
-                except asyncio.TimeoutError:
-                    proc.kill()
-                    logger.error("Parser timed out after 300s")
-            except Exception as e:
-                logger.error(f"Parser exception: {e}")
-            await asyncio.sleep(30 * 60)
-
-    async def run_bot():
-        async with application:
-            await application.initialize()
-            await application.start()
-            await application.bot.set_my_commands([
-                ("start", "Начать поиск работы"), ("mystats",
-                                                   "Моя статистика"),
-                ("buy", "Купить пакет откликов"),
-                ("help", "Справка и возможности"),
-                ("cancel", "Отменить текущий поиск")
-            ])
-            logger.info("Bot commands menu updated")
-            asyncio.create_task(run_parser_periodically())
-            await application.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES)
-            await asyncio.Event().wait()
-
-    asyncio.run(run_bot())
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == '__main__':
