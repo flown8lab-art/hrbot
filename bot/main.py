@@ -36,13 +36,13 @@ STEP_START, STEP_RESUME, STEP_PREFERENCES, STEP_SEARCH, STEP_VACANCY = range(5)
 
 user_data_store = {}
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-USERS_DB_FILE = os.path.join(BASE_DIR, "users_db.json")
-STATS_FILE = os.path.join(BASE_DIR, "stats.json")
+USERS_DB_FILE = os.path.join(BASE_DIR, '/root/hrbot_data/users_db.json')
+STATS_FILE = os.path.join(BASE_DIR, '/root/hrbot_data/stats.json')
 VACANCIES_DB_FILE = os.path.join(BASE_DIR, "vacancies.db")
 SEARCH_CACHE = {}
 CACHE_TTL = 300
 
-conn = sqlite3.connect(VACANCIES_DB_FILE, check_same_thread=False)
+conn = sqlite3.connect("/root/hrbot_data/vacancies.db", check_same_thread=False)
 db_cursor = conn.cursor()
 db_cursor.execute("""
 CREATE TABLE IF NOT EXISTS telegram_vacancies (
