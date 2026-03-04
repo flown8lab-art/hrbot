@@ -96,6 +96,7 @@ HEADERS = {
 
 
 def get_user(user_id):
+    user_id = str(user_id)
     if user_id not in users_db:
         users_db[user_id] = {
             "credits": 3,
