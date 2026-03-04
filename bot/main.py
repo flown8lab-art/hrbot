@@ -38,7 +38,7 @@ user_data_store = {}
 
 BASE_DATA_PATH = os.environ.get(
     "DATA_PATH",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot")
+    os.path.dirname(os.path.abspath(__file__))
 )
 
 USERS_DB_FILE = os.path.join(BASE_DATA_PATH, "users_db.json")
@@ -1893,7 +1893,7 @@ def main():
                 logger.info("Starting scheduled parser run...")
                 proc = await asyncio.create_subprocess_exec(
                     'python',
-                    os.path.join(BASE_DIR, 'telegram_parser.py'),
+                    os.path.join(BASE_DATA_PATH, 'telegram_parser.py'),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE)
                 try:
