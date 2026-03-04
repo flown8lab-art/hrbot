@@ -1,0 +1,89 @@
+Задача
+
+Исправить логику ConversationHandler так, чтобы:
+
+Если пользователь вставляет длинное текстовое резюме,
+
+И Telegram делит его на несколько сообщений,
+
+Бот не переходил к следующему шагу, пока пользователь не закончит ввод.
+
+Что нужно реализовать
+1️⃣ Ввести буфер для накопления текста
+
+В начале файла добавить:
+
+RESUME_BUFFER_TIMEOUT = 2.5  # секунд ожидания следующей части
+2️⃣ В STEP_RESUME изменить обработчик текста
+
+Найти функцию, которая принимает текст резюме (например handle_resume_text).
+
+Заменить её логикой накопления:
+
+import asyncio
+
+async def handle_resume_text(update, context):
+    user_id = update.effective_user.id
+    text = update.message.text
+
+    if "resume_buffer" not in context.user_data:
+        context.user_data["resume_buffer"] = ""
+    
+    context.user_data["resume_buffer"] += "\n" + text
+
+    # если уже есть задача ожидания — отменяем
+    if "resume_timer" in context.user_data:
+        context.user_data["resume_timer"].cancel()
+
+    async def finalize_resume():
+        await asyncio.sleep(RESUME_BUFFER_TIMEOUT)
+
+        full_resume = context.user_data.pop("resume_buffer", "")
+        context.user_data.pop("resume_timer", None)
+
+        context.user_data["resume_text"] = full_resume
+
+        await update.message.reply_text("Резюме получено. Теперь укажите параметры поиска.")
+        return STEP_PREFERENCES
+
+    task = asyncio.create_task(finalize_resume())
+    context.user_data["resume_timer"] = task
+
+    return STEP_RESUME
+3️⃣ Убедиться, что ConversationHandler настроен правильно
+
+В состоянии STEP_RESUME должен быть только:
+
+MessageHandler(filters.TEXT & ~filters.COMMAND, handle_resume_text)
+
+И не должно быть перехода к следующему шагу внутри первого же сообщения.
+
+Что изменится
+
+Теперь бот:
+
+Получает первую часть текста.
+
+Ждёт 2.5 секунды.
+
+Если приходит ещё часть — таймер сбрасывается.
+
+Когда пользователь перестал писать — объединяет всё в одно резюме.
+
+Только после этого переходит к STEP_PREFERENCES.
+
+Ничего больше менять не нужно
+
+ConversationHandler не переписывать
+
+Структуру шагов не менять
+
+PDF/Word обработку не трогать
+
+Результат
+
+Большие текстовые резюме обрабатываются корректно.
+
+Бот не путает части резюме с параметрами поиска.
+
+Поведение становится предсказуемым.

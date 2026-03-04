@@ -47,6 +47,7 @@ VACANCIES_DB_FILE = os.path.join(BASE_DATA_PATH, "vacancies.db")
 
 SEARCH_CACHE = {}
 CACHE_TTL = 300
+RESUME_BUFFER_TIMEOUT = 2.5
 
 conn = sqlite3.connect(VACANCIES_DB_FILE, check_same_thread=False)
 db_cursor = conn.cursor()
@@ -383,6 +384,39 @@ async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     parse_mode='Markdown')
 
 
+async def finalize_resume(user_id, context, chat_id):
+    await asyncio.sleep(RESUME_BUFFER_TIMEOUT)
+
+    buf = context.user_data.pop("resume_buffer", "")
+    context.user_data.pop("resume_timer", None)
+
+    if not buf or len(buf.strip()) < 50:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Резюме слишком короткое (меньше 50 символов).\n"
+                 "Пожалуйста, отправь полное резюме.")
+        return
+
+    user_data_store[user_id]['resume'] = buf.strip()
+
+    skip_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("Пропустить ➡️", callback_data="skip_preferences")
+    ]])
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"Резюме загружено ({len(buf)} символов)\n\n"
+             "*Шаг 2 из 3*: Опиши свои пожелания к вакансии\n\n"
+             "Напиши своими словами, что важно:\n"
+             "• Удалёнка или офис?\n"
+             "• Желаемая зарплата?\n"
+             "• Опыт работы?\n"
+             "• Город?\n\n"
+             "Например: «удалёнка, от 150000, без опыта ок, Москва»\n\n"
+             "Или нажми кнопку, чтобы искать без фильтров.",
+        parse_mode='Markdown',
+        reply_markup=skip_kb)
+
+
 async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(
@@ -442,33 +476,46 @@ async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Формат не поддерживается.\n"
                 "Отправь PDF, Word (.docx) или текстовый файл (.txt)")
             return STEP_RESUME
-    else:
-        resume_text = update.message.text
 
-    if not resume_text or len(resume_text.strip()) < 50:
+        if not resume_text or len(resume_text.strip()) < 50:
+            await update.message.reply_text(
+                "Резюме слишком короткое (меньше 50 символов).\n"
+                "Пожалуйста, отправь полное резюме.")
+            return STEP_RESUME
+
+        user_data_store[user_id]['resume'] = resume_text.strip()
+
+        skip_kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("Пропустить ➡️", callback_data="skip_preferences")
+        ]])
         await update.message.reply_text(
-            "Резюме слишком короткое (меньше 50 символов).\n"
-            "Пожалуйста, отправь полное резюме.")
-        return STEP_RESUME
+            f"Резюме загружено ({len(resume_text)} символов)\n\n"
+            "*Шаг 2 из 3*: Опиши свои пожелания к вакансии\n\n"
+            "Напиши своими словами, что важно:\n"
+            "• Удалёнка или офис?\n"
+            "• Желаемая зарплата?\n"
+            "• Опыт работы?\n"
+            "• Город?\n\n"
+            "Например: «удалёнка, от 150000, без опыта ок, Москва»\n\n"
+            "Или нажми кнопку, чтобы искать без фильтров.",
+            parse_mode='Markdown',
+            reply_markup=skip_kb)
+        return STEP_PREFERENCES
 
-    user_data_store[user_id]['resume'] = resume_text.strip()
+    text = update.message.text
+    if "resume_buffer" not in context.user_data:
+        context.user_data["resume_buffer"] = ""
 
-    skip_kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("Пропустить ➡️", callback_data="skip_preferences")
-    ]])
-    await update.message.reply_text(
-        f"Резюме загружено ({len(resume_text)} символов)\n\n"
-        "**Шаг 2 из 3**: Опиши свои пожелания к вакансии\n\n"
-        "Напиши своими словами, что важно:\n"
-        "• Удалёнка или офис?\n"
-        "• Желаемая зарплата?\n"
-        "• Опыт работы?\n"
-        "• Город?\n\n"
-        "Например: «удалёнка, от 150000, без опыта ок, Москва»\n\n"
-        "Или нажми кнопку, чтобы искать без фильтров.",
-        parse_mode='Markdown',
-        reply_markup=skip_kb)
-    return STEP_PREFERENCES
+    context.user_data["resume_buffer"] += "\n" + text
+
+    if "resume_timer" in context.user_data:
+        context.user_data["resume_timer"].cancel()
+
+    task = asyncio.create_task(
+        finalize_resume(user_id, context, update.effective_chat.id))
+    context.user_data["resume_timer"] = task
+
+    return STEP_RESUME
 
 
 async def receive_preferences(update: Update,
