@@ -208,6 +208,10 @@ async def search_hh(query: str, prefs: dict) -> list:
                         break
                     data = await response.json()
 
+                if not isinstance(data, dict):
+                    logger.error(f"HH returned non-dict: {data}")
+                    break
+
                 items = data.get("items", [])
                 if not items:
                     break
