@@ -488,7 +488,7 @@ async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• Город?\n\n"
             "<b>Например: «удалёнка, от 150000, без опыта ок, Москва»</b>\n\n"
             "Или нажми кнопку, чтобы искать без фильтров.",
-            parse_mode='Markdown',
+            parse_mode='HTML',
             reply_markup=skip_kb)
         return STEP_PREFERENCES
 
