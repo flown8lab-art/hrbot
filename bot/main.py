@@ -587,7 +587,7 @@ async def receive_preferences(update: Update,
 
     await update.message.reply_text(
         f"Фильтры: {pref_summary}\n\n"
-        "<b>Шаг 3 из 3: Поиск вакансий</b>\n\n"
+        "<b>11Шаг 3 из 3: Поиск вакансий</b>\n\n"
         "Напиши должность для поиска:\n"
         "Например: «менеджер проекта» или «Python разработчик»",
         parse_mode='HTML')
