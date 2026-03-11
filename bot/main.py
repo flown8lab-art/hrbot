@@ -140,7 +140,11 @@ def safe_salary(raw):
         import re as _re
         nums = _re.findall(r'\d+', raw.replace(' ', ''))
         if len(nums) >= 2:
-            return {"from": int(nums[0]), "to": int(nums[1]), "currency": "RUR"}
+            return {
+                "from": int(nums[0]),
+                "to": int(nums[1]),
+                "currency": "RUR"
+            }
         elif len(nums) == 1:
             return {"from": int(nums[0]), "to": None, "currency": "RUR"}
     return None
@@ -587,7 +591,7 @@ async def receive_preferences(update: Update,
 
     await update.message.reply_text(
         f"Фильтры: {pref_summary}\n\n"
-        "<b>11Шаг 3 из 3: Поиск вакансий</b>\n\n"
+        "<b>Шаг 3 из 3: Поиск вакансий</b>\n\n"
         "Напиши должность для поиска:\n"
         "Например: «менеджер проекта» или «Python разработчик»",
         parse_mode='HTML')
