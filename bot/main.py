@@ -574,7 +574,7 @@ async def receive_preferences(update: Update,
 
     await update.message.reply_text(
         f"Фильтры: {pref_summary}\n\n"
-        "<b>Шаг 3 из 3: Поиск вакансий</b>\n\n"
+        "<b>1Шаг 3 из 3: Поиск вакансий</b>\n\n"
         "Напиши должность для поиска:\n"
         "Например: «менеджер проекта» или «Python разработчик»",
         parse_mode='Markdown')
@@ -596,7 +596,7 @@ async def skip_preferences_callback(update: Update,
 
     await query.edit_message_text(
         "Фильтры: без фильтров\n\n"
-        "<b>Шаг 3 из 3: Поиск вакансий</b>\n\n"
+        "<b>2Шаг 3 из 3: Поиск вакансий</b>\n\n"
         "Напиши должность для поиска:\n"
         "Например: «менеджер проекта» или «Python разработчик»",
         parse_mode='Markdown')
