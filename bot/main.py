@@ -480,7 +480,7 @@ async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]])
         await update.message.reply_text(
             f"Резюме загружено ({len(resume_text)} символов)\n\n"
-            "<b>Шаг 2 из 3*: Опиши свои пожелания к вакансии</b>\n\n"
+            "<b>Шаг 2 из 3: Опиши свои пожелания к вакансии</b>\n\n"
             "Напиши своими словами, что важно:\n"
             "• Удалёнка или офис?\n"
             "• Желаемая зарплата?\n"
@@ -737,6 +737,10 @@ async def search_trudvsem(query: str, prefs: dict) -> list:
                     if response.status != 200:
                         break
                     data = await response.json()
+
+                if not isinstance(data, dict):
+                    logger.error(f"Trudvsem returned non-dict: {data}")
+                    break
 
                 results = data.get("results", {}).get("vacancies", [])
                 if not results:
