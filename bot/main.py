@@ -216,6 +216,7 @@ async def search_hh(query: str, prefs: dict) -> list:
                 if not items:
                     break
 
+                MAX_VACANCIES = 1000
                 for item in items:
                     all_vacancies.append({
                         "id":
@@ -236,6 +237,8 @@ async def search_hh(query: str, prefs: dict) -> list:
                         "hh"
                     })
 
+                if len(all_vacancies) >= MAX_VACANCIES:
+                    break
                 if page >= data.get("pages", 0) - 1:
                     break
                 page += 1
@@ -750,6 +753,7 @@ async def search_trudvsem(query: str, prefs: dict) -> list:
                 if not results:
                     break
 
+                MAX_VACANCIES = 1000
                 for item in results:
                     vac = item.get("vacancy", {})
                     company = vac.get("company", {})
@@ -780,6 +784,8 @@ async def search_trudvsem(query: str, prefs: dict) -> list:
                         "trudvsem"
                     })
 
+                if len(all_vacancies) >= MAX_VACANCIES:
+                    break
                 offset += limit
 
         return all_vacancies
