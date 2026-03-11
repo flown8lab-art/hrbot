@@ -133,6 +133,19 @@ def clean_applied_history(user):
         user["applied_vacancies"] = user["applied_vacancies"][-200:]
 
 
+def safe_salary(raw):
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        import re as _re
+        nums = _re.findall(r'\d+', raw.replace(' ', ''))
+        if len(nums) >= 2:
+            return {"from": int(nums[0]), "to": int(nums[1]), "currency": "RUR"}
+        elif len(nums) == 1:
+            return {"from": int(nums[0]), "to": None, "currency": "RUR"}
+    return None
+
+
 def get_cache(key):
     if key in SEARCH_CACHE:
         data, ts = SEARCH_CACHE[key]
@@ -493,7 +506,7 @@ async def receive_resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• Желаемая зарплата?\n"
             "• Опыт работы?\n"
             "• Город?\n\n"
-            "<b>Например: «удалёнка, от 150000, без опыта ок, Москва»</b>\n\n"
+            "<b>Например: «удалёнка, от 150000, без опыта, Москва»</b>\n\n"
             "Или нажми кнопку, чтобы искать без фильтров.",
             parse_mode='HTML',
             reply_markup=skip_kb)
@@ -574,10 +587,10 @@ async def receive_preferences(update: Update,
 
     await update.message.reply_text(
         f"Фильтры: {pref_summary}\n\n"
-        "<b>1Шаг 3 из 3: Поиск вакансий</b>\n\n"
+        "<b>Шаг 3 из 3: Поиск вакансий</b>\n\n"
         "Напиши должность для поиска:\n"
         "Например: «менеджер проекта» или «Python разработчик»",
-        parse_mode='Markdown')
+        parse_mode='HTML')
     return STEP_SEARCH
 
 
@@ -596,10 +609,10 @@ async def skip_preferences_callback(update: Update,
 
     await query.edit_message_text(
         "Фильтры: без фильтров\n\n"
-        "<b>2Шаг 3 из 3: Поиск вакансий</b>\n\n"
+        "<b>Шаг 3 из 3: Поиск вакансий</b>\n\n"
         "Напиши должность для поиска:\n"
         "Например: «менеджер проекта» или «Python разработчик»",
-        parse_mode='Markdown')
+        parse_mode='HTML')
     return STEP_SEARCH
 
 
@@ -817,7 +830,7 @@ def search_telegram_vacancies(query: str, prefs: dict) -> list:
             "employer": {
                 "name": row[2]
             },
-            "salary": row[3],
+            "salary": safe_salary(row[3]),
             "alternate_url": row[4],
             "area": {
                 "name": row[5]
@@ -882,8 +895,8 @@ def build_vacancy_keyboard(vacancies: list,
             prev_group_global = group
 
         salary_text = ""
-        if vac.get('salary'):
-            sal = vac['salary']
+        sal = safe_salary(vac.get('salary'))
+        if sal:
             sal_from = sal.get('from') or 0
             sal_to = sal.get('to') or 0
             if sal_from and sal_to:
@@ -1130,8 +1143,8 @@ async def vacancy_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                                                ''))[:800]
 
             salary_text = "Не указана"
-            if vacancy.get('salary'):
-                sal = vacancy['salary']
+            sal = safe_salary(vacancy.get('salary'))
+            if sal:
                 if sal.get('from') and sal.get('to'):
                     salary_text = f"{sal['from']:,} - {sal['to']:,} руб."
                 elif sal.get('from'):
@@ -1151,8 +1164,8 @@ async def vacancy_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif source == 'trudvsem':
             vacancy_details = vacancy
             salary_text = "Не указана"
-            if vacancy.get('salary'):
-                sal = vacancy['salary']
+            sal = safe_salary(vacancy.get('salary'))
+            if sal:
                 if sal.get('from') and sal.get('to'):
                     salary_text = f"{sal['from']:,} - {sal['to']:,} руб."
                 elif sal.get('from'):
@@ -1184,8 +1197,8 @@ async def vacancy_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
             description = ' '.join(description.split())[:800]
 
             salary_text = "Не указана"
-            if vacancy_details.get('salary'):
-                sal = vacancy_details['salary']
+            sal = safe_salary(vacancy_details.get('salary'))
+            if sal:
                 if sal.get('from') and sal.get('to'):
                     salary_text = f"{sal['from']:,} - {sal['to']:,} {sal.get('currency', '')}"
                 elif sal.get('from'):
